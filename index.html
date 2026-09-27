@@ -293,6 +293,9 @@ a{color:var(--accent)}
   box-shadow:var(--shadow-md);padding:8px;display:none;
 }
 .pop.on{display:block}
+.ver{font-size:11.5px;color:var(--fg-faint);padding:4px 8px 2px}
+.ver b{font-weight:600;color:var(--fg-muted)}
+.empty p.ver{margin:-8px 0 18px;padding:0;font-size:12px}
 .pop h4{margin:8px 8px 4px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--fg-faint)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 8px;border-radius:8px;font-size:13.5px}
 .row:hover{background:var(--bg-sub)}
@@ -569,6 +572,7 @@ a{color:var(--accent)}
     </div>
 
     <div class="pop" id="pop">
+      <div class="ver">Markdown Viewer <b class="app-ver"></b></div>
       <h4>文字サイズ</h4>
       <div class="row">サイズ
         <div class="seg" id="segSize">
@@ -656,6 +660,7 @@ a{color:var(--accent)}
             ネストしたリストのインデントと表を、読みやすい形に整えて表示します。<br>
             <span class="kbd">Ctrl</span>+<span class="kbd">V</span> でクリップボードのMarkdownも読み込めます。
           </p>
+          <p class="ver">バージョン <b class="app-ver"></b></p>
           <div class="cta">
             <button class="btn primary" id="btnOpen2">ファイルを選ぶ</button>
             <button class="btn" id="btnDemo">サンプルを見る</button>
@@ -1173,7 +1178,10 @@ const MD = (() => {
  * ==========================================================================*/
 (() => {
   "use strict";
+  /* 公開されている版が新しいかどうか、画面で確かめられるようにする。変更したら上げる */
+  const VERSION = "v2.0 (2026-09-28)";
   const $ = s => document.querySelector(s);
+  document.querySelectorAll(".app-ver").forEach(e => e.textContent = VERSION);
   const store = {
     get(k, d) { try { const v = localStorage.getItem("mdv." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem("mdv." + k, JSON.stringify(v)); } catch (e) {} }
@@ -1302,6 +1310,7 @@ const MD = (() => {
       chars.toLocaleString() + " 文字",
       "約 " + Math.max(1, Math.round(words / 500)) + " 分で読了",
       res.toc.length + " 見出し",
+      VERSION,
       (res.html.match(/<table/g) || []).length + " 表 / " +
       (res.html.match(/<pre/g) || []).length + " コードブロック"
     ].concat(ms ? ["描画 " + ms + "ms"] : []).map(s => "<span>" + s + "</span>").join("");
