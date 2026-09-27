@@ -2,7 +2,7 @@
 
 Markdownファイルをドラッグ&ドロップすると、インデントと表を読みやすい形で表示するビューアです。
 
-HTMLファイル1つだけで動きます。インストールもインターネット接続も要りません。ダブルクリックでブラウザが開き、そこにファイルを落とすだけです。
+HTMLファイル1つだけで動きます。インストールは要りません。ダブルクリックでブラウザが開き、そこにファイルを落とすだけです。公開版は https://negilab.github.io/markdown-viewer/ で使えます。
 
 ## 使い方
 
@@ -71,7 +71,9 @@ iPhoneでは、ショートカットAppで次のように組むと、ファイ�
 
 保存するとき、Markdownの書き方が少し整えられます(表の列幅がそろう、など)。先頭の `---` の情報欄(フロントマター)と改行コードはそのまま残します。
 
-編集部品は [Milkdown](https://milkdown.dev/)(MIT)です。`beta/` で `npm install && npm run build` を実行すると、部品ごと `beta.html` 1つにまとめ直します。ネットにつながっていなくても動きます。
+右上の「表示のみ」で、編集せずに読むだけの表示に切り替えられます。文字は Inter と Noto Sans JP(Google Fonts)を使います。
+
+編集部品は [Milkdown](https://milkdown.dev/)(MIT)です。`beta/` で `npm install && npm run build` を実行すると、部品ごと `beta.html` 1つにまとめ直します。
 
 ## 表示
 
