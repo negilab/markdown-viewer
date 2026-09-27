@@ -142,24 +142,61 @@ a{color:var(--accent)}
 .sidebar{grid-column:1}
 .editor,.main{grid-column:2}
 
-/* ---------- 表示 / 編集 / 左右 ---------- */
-.mode{flex:none}
-.mode button{padding:5px 11px}
+/* ---------- 全文の編集（左右に並べる） ---------- */
 .editor{display:none;min-height:0;background:var(--bg-sub);border-right:1px solid var(--border)}
 .editor textarea{
   display:block;width:100%;height:100%;margin:0;resize:none;border:0;outline:0;
   padding:32px 32px 40vh;background:transparent;color:var(--fg);
   font:14px/1.8 var(--mono);tab-size:4;
 }
-.body.has-doc.m-edit .editor{display:block}
-.body.has-doc.m-edit .main{display:none}
-.body.has-doc.m-split{grid-template-columns:264px 1fr 1fr}
-.body.has-doc.m-split.no-side{grid-template-columns:0 1fr 1fr}
-.body.has-doc.m-split .editor{display:block}
-.body.has-doc.m-split .main{grid-column:3}
-.body.has-doc.m-split .reader{padding-left:32px;padding-right:32px}
+.body.has-doc.full{grid-template-columns:264px 1fr 1fr}
+.body.has-doc.full.no-side{grid-template-columns:0 1fr 1fr}
+.body.has-doc.full .editor{display:block}
+.body.has-doc.full .main{grid-column:3}
+.body.has-doc.full .reader{padding-left:32px;padding-right:32px}
+
+/* ---------- 段落ごとの編集 ---------- */
+.md > [data-s]{position:relative}
+.md > [data-s].hov{background:var(--bg-sub);box-shadow:0 0 0 8px var(--bg-sub);border-radius:2px}
+.md > [data-s].hov::before{
+  content:"✎";position:absolute;left:-30px;top:.15em;font-size:13px;color:var(--fg-faint);
+}
+.md.tap-edit > [data-s]{cursor:pointer}
+.md .blk-hide{display:none !important}
+.blk-edit{
+  display:block;width:calc(100% + 28px);margin:.2em -14px 1.1em;padding:12px 14px;
+  resize:none;overflow:hidden;border:1.5px solid var(--accent);border-radius:10px;outline:0;
+  background:var(--bg-elev);color:var(--fg);box-shadow:0 4px 16px color-mix(in srgb, var(--accent) 14%, transparent);
+  font:14px/1.85 var(--mono);tab-size:4;
+}
+.blk-hint{margin:-.8em 0 1.1em;font-size:11.5px;color:var(--fg-faint);display:flex;justify-content:space-between}
+
+/* ---------- 編集キット（PC はサイドバーの下） ---------- */
+.kit{flex:none;background:var(--bg-elev)}
+.kit .side-head span:last-child{font-weight:500;text-transform:none;letter-spacing:0}
+.kit-body{padding:0 12px 12px}
+.kit-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.kb{
+  height:38px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elev);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:13px;line-height:1.1;color:var(--fg);
+}
+.kb small{font-size:9.5px;color:var(--fg-faint);margin-top:2px}
+.kb:hover{border-color:var(--border-strong);background:var(--bg-sub)}
+.kb:disabled{opacity:.4;cursor:default}
+.kit-more{margin-top:6px}
+.kit-more summary{font-size:11.5px;color:var(--fg-muted);cursor:pointer;padding:4px 2px;list-style:none}
+.kit-more summary::before{content:"▸ "}
+.kit-more[open] summary::before{content:"▾ "}
+.kit-more .kit-grid{margin-top:4px}
+.kit-row{display:flex;gap:6px;margin-top:8px}
+.kit-row .kb{flex:1;flex-direction:row;gap:4px}
+.kit-row .kb.on{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+
+/* ---------- スマホ：編集ボタン・キーボード上のキット・下から出るシート ---------- */
+.fab,.acc,.scrim{display:none}
 #btnSave.dirty{background:var(--accent);color:var(--accent-fg);border-color:transparent}
-.file-item .dot{color:var(--accent);font-size:10px;line-height:1}
+.file-item .dot,.doc-title .dot{color:var(--accent);font-size:10px;line-height:1}
 
 /* ---------- sidebar ---------- */
 .sidebar{
@@ -426,6 +463,7 @@ a{color:var(--accent)}
   .body{display:block}
   .main{overflow:visible}
   .reader{max-width:none;padding:0}
+  .fab,.acc,.scrim,.blk-hint{display:none !important}
   .md pre,.table-wrap{break-inside:avoid}
   .md h1,.md h2,.md h3{break-after:avoid}
   .md thead th{position:static}
@@ -433,24 +471,66 @@ a{color:var(--accent)}
 
 /* ---------- responsive ---------- */
 @media (max-width:820px){
-  .body{grid-template-columns:0 1fr}
+  .body,.body.no-side{grid-template-columns:0 1fr}
+  /* サイドバーは下から出るシートにする */
   .sidebar{
-    position:fixed;left:0;top:52px;bottom:0;width:264px;z-index:30;
-    transform:translateX(-100%);transition:transform .18s ease;
+    position:fixed;left:0;right:0;bottom:0;top:auto;height:72dvh;z-index:40;
+    border:0;border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.2);
+    transform:translateY(105%);transition:transform .2s ease;
   }
-  .body:not(.no-side) .sidebar{display:flex;transform:none;box-shadow:var(--shadow-md)}
-  .reader{padding:28px 20px 40vh}
-  .doc-title{display:none}
-  /* 狭い画面では左右並びをやめ、表示と編集の切り替えだけにする */
-  .body.has-doc.m-split,.body.has-doc.m-split.no-side{grid-template-columns:0 1fr}
-  .body.has-doc.m-split .editor{display:none}
-  .body.has-doc.m-split .main{grid-column:2}
-  .mode .wide-only{display:none}
+  .sidebar::before{content:"";display:block;flex:none;width:38px;height:5px;border-radius:3px;background:var(--border-strong);margin:10px auto 2px}
+  .body:not(.no-side) .sidebar{display:flex;transform:none}
+  body.sheet .scrim{display:block;position:fixed;inset:0;z-index:39;background:rgba(15,18,22,.35)}
+  .files{max-height:40%}
+  .kit .side-head,.kit-grid,.kit-more{display:none}
+  .kit-body{padding:10px 12px calc(14px + env(safe-area-inset-bottom))}
+  .kit-row{margin-top:0}
+  .kit-row .kb{height:42px}
+  .reader{padding:24px 20px 40vh}
   .topbar{gap:6px;padding:0 10px}
   .brand .label,.btn .label,#btnPrint{display:none}
   .btn.has-label{width:32px;padding:0;justify-content:center}
+  .doc-title{padding-left:0;font-size:14px}
+  .md > [data-s].hov{background:none;box-shadow:none}
+  .md > [data-s].hov::before{display:none}
+  .md{-webkit-touch-callout:none}
+  .blk-edit{font-size:16px;width:calc(100% + 16px);margin-left:-8px;margin-right:-8px;padding:10px 12px}
+  .blk-hint{display:none}
+  .body.has-doc.full,.body.has-doc.full.no-side{grid-template-columns:0 1fr}
+  .body.has-doc.full .main{display:none}
+  .body.has-doc.full .editor{grid-column:2}
   .editor textarea{padding:20px 16px 40vh;font-size:16px}
-  .tools{margin-left:auto}
+
+  /* 下はキットやシートで埋まるので、お知らせは上に出す */
+  .toast{bottom:auto;top:62px;transform:translate(-50%,-10px);white-space:nowrap}
+  .fab{
+    display:flex;align-items:center;gap:6px;position:fixed;right:18px;
+    bottom:calc(22px + env(safe-area-inset-bottom));z-index:25;
+    height:48px;padding:0 18px;border-radius:24px;background:var(--accent);color:var(--accent-fg);
+    font-weight:700;font-size:14.5px;box-shadow:0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  .fab.on{background:var(--bg-elev);color:var(--accent);border:1.5px solid var(--accent)}
+  body.editing .fab,body:not(.has-doc) .fab{display:none}
+  /* キーボードのすぐ上に出すキット。位置は visualViewport に合わせて JS で動かす */
+  body.editing .acc{
+    display:flex;gap:5px;position:fixed;left:0;right:0;bottom:0;z-index:35;
+    padding:6px 6px calc(6px + env(safe-area-inset-bottom));
+    background:var(--bg-sunken);border-top:1px solid var(--border);
+  }
+  .acc button{
+    flex:1;min-width:0;height:38px;border-radius:8px;background:var(--bg-elev);
+    box-shadow:0 1px 0 rgba(0,0,0,.18);font-size:14px;color:var(--fg);
+  }
+  .acc button.b{font-weight:800}
+  .acc button.done{flex:1.6;background:var(--accent);color:var(--accent-fg);font-weight:700}
+  .acc button:disabled{opacity:.4}
+  .acc-more{
+    position:absolute;left:6px;right:6px;bottom:calc(100% + 6px);display:none;
+    grid-template-columns:repeat(4,1fr);gap:5px;padding:6px;border-radius:12px;
+    background:var(--bg-sunken);border:1px solid var(--border);box-shadow:var(--shadow-md);
+  }
+  .acc-more.on{display:grid}
+  .acc-more button{height:40px;font-size:13px}
 }
 </style>
 </head>
@@ -468,9 +548,6 @@ a{color:var(--accent)}
       <span class="label">Markdown Viewer</span>
     </div>
     <div class="doc-title" id="docTitle"></div>
-    <div class="seg mode" id="segMode" hidden>
-      <button data-v="view" class="on">表示</button><button data-v="edit">編集</button><button data-v="split" class="wide-only" title="編集と表示を左右に並べる">左右</button>
-    </div>
     <div class="tools">
       <button class="btn has-label" id="btnSave" title="保存 (Ctrl+S)" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 3v5h7V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg>
@@ -520,12 +597,44 @@ a{color:var(--accent)}
   <div class="body" id="bodyGrid">
     <aside class="sidebar">
       <section class="side-sec files">
-        <div class="side-head"><span>ファイル</span><button id="btnClear">すべて閉じる</button></div>
+        <div class="side-head"><span>ファイル</span><span><button id="btnNew">＋ 新規</button>　<button id="btnClear">すべて閉じる</button></span></div>
         <div class="side-body" id="fileList"><div class="side-empty">まだ開いていません</div></div>
       </section>
       <section class="side-sec toc-sec">
         <div class="side-head"><span>目次</span></div>
         <div class="side-body" id="toc"><div class="side-empty">見出しがここに並びます</div></div>
+      </section>
+      <section class="side-sec kit" id="kit">
+        <div class="side-head"><span>編集キット</span><span id="kitState">段落をダブルクリックで編集</span></div>
+        <div class="kit-body">
+          <div class="kit-grid">
+            <button class="kb" data-k="undo" title="戻る (Ctrl+Z)">↶<small>戻る</small></button>
+            <button class="kb" data-k="redo" title="やり直す (Ctrl+Shift+Z)">↷<small>やり直す</small></button>
+            <button class="kb" data-k="h" title="見出し（押すたびに大→中→小→なし）">H<small>見出し</small></button>
+            <button class="kb" data-k="b" title="太字"><b>B</b><small>太字</small></button>
+            <button class="kb" data-k="link" title="リンク">🔗<small>リンク</small></button>
+            <button class="kb" data-k="ul" title="箇条書き">・<small>箇条書き</small></button>
+            <button class="kb" data-k="ol" title="番号付き">1.<small>番号</small></button>
+            <button class="kb" data-k="task" title="チェック（押すたびに ☐→☑）">☐<small>チェック</small></button>
+            <button class="kb" data-k="indent" title="字下げ (Tab)">⇥<small>字下げ</small></button>
+            <button class="kb" data-k="outdent" title="字下げを戻す (Shift+Tab)">⇤<small>戻す</small></button>
+          </div>
+          <details class="kit-more"><summary>その他</summary>
+            <div class="kit-grid">
+              <button class="kb" data-k="table" title="表">▦<small>表</small></button>
+              <button class="kb" data-k="quote" title="引用">❝<small>引用</small></button>
+              <button class="kb" data-k="hr" title="区切り線">―<small>区切り線</small></button>
+              <button class="kb" data-k="strike" title="取り消し"><s>S</s><small>取り消し</small></button>
+              <button class="kb" data-k="mark" title="マーカー">▮<small>マーカー</small></button>
+              <button class="kb" data-k="code" title="コード">&lt;/&gt;<small>コード</small></button>
+              <button class="kb" data-k="img" title="画像">🖼<small>画像</small></button>
+            </div>
+          </details>
+          <div class="kit-row">
+            <button class="kb" data-k="para" title="いま編集中の段落の下（なければ末尾）に段落を足す">＋ 段落</button>
+            <button class="kb" id="btnFull" title="文書全体をMarkdownのまま編集する">全文を編集</button>
+          </div>
+        </div>
       </section>
     </aside>
 
@@ -569,6 +678,32 @@ a{color:var(--accent)}
   </div>
 </div>
 
+<div class="scrim" id="scrim"></div>
+<button class="fab" id="fab" type="button">✎ 編集</button>
+<div class="acc" id="acc">
+  <div class="acc-more" id="accMore">
+    <button data-k="ol">1. 番号</button>
+    <button data-k="link">🔗 リンク</button>
+    <button data-k="table">▦ 表</button>
+    <button data-k="quote">❝ 引用</button>
+    <button data-k="hr">― 区切り</button>
+    <button data-k="strike">取り消し</button>
+    <button data-k="mark">マーカー</button>
+    <button data-k="code">コード</button>
+    <button data-k="img">🖼 画像</button>
+    <button data-k="para">＋ 段落</button>
+  </div>
+  <button data-k="undo">↶</button>
+  <button data-k="redo">↷</button>
+  <button data-k="indent">⇥</button>
+  <button data-k="outdent">⇤</button>
+  <button data-k="ul">・</button>
+  <button data-k="task">☐</button>
+  <button data-k="h">H</button>
+  <button data-k="b" class="b">B</button>
+  <button data-k="more">⋯</button>
+  <button data-k="done" class="done">完了</button>
+</div>
 <div class="toast" id="toast"></div>
 <input type="file" id="picker" accept=".md,.markdown,.mdx,.mkd,.txt,text/markdown,text/plain" multiple hidden>
 
@@ -825,13 +960,25 @@ const MD = (() => {
   }
 
   /* --------------------------------------------------------------- blocks */
-  function parse(src, ctx) {
+  /* map を渡すと、最上位のブロックごとに元の行範囲を <!--b:開始:終了--> で書き込む
+     （表示中の段落をダブルクリックして、その部分だけ編集するため） */
+  function parse(src, ctx, map) {
     const lines = src.replace(/\t/g, "    ").split("\n");
-    let out = "", i = 0;
+    let out = "", i = 0, mark = -1;
+    const flush = () => {
+      if (mark < 0) return;
+      let e = i;
+      while (e > mark && isBlank(lines[e - 1])) e--;
+      out = out.slice(0, markAt) + "<!--b:" + map[mark] + ":" + (map[e - 1] + 1) + "-->" + out.slice(markAt);
+      mark = -1;
+    };
+    let markAt = 0;
 
     while (i < lines.length) {
+      flush();
       const line = lines[i];
       if (isBlank(line)) { i++; continue; }
+      if (map) { mark = i; markAt = out.length; }
 
       /* コードフェンス */
       let m = FENCE.exec(line);
@@ -932,6 +1079,7 @@ const MD = (() => {
       }
       if (buf.length) out += "<p>" + inline(buf.join("\n"), ctx) + "</p>";
     }
+    flush();
     return out;
   }
 
@@ -961,6 +1109,7 @@ const MD = (() => {
     opts = opts || {};
     let text = String(src).replace(/^﻿/, "").replace(/\r\n?/g, "\n");
     const fm = frontMatter(text);
+    const fmLines = text.slice(0, text.length - fm.body.length).split("\n").length - 1;
     text = fm.body;
 
     const ctx = {
@@ -970,14 +1119,15 @@ const MD = (() => {
     };
 
     /* 参照定義と脚注定義を先に回収 */
-    const kept = [];
+    const kept = [], map = [];
     const src2 = text.split("\n");
+    const keep = (l, i) => { kept.push(l); map.push(i + fmLines); };
     let inFence = false, fenceRe = null;
     for (let i = 0; i < src2.length; i++) {
       const l = src2[i];
       const f = FENCE.exec(l);
-      if (!inFence && f) { inFence = true; fenceRe = new RegExp("^[ \\t]{0,3}" + f[2][0] + "{" + f[2].length + ",}[ \\t]*$"); kept.push(l); continue; }
-      if (inFence) { if (fenceRe.test(l)) inFence = false; kept.push(l); continue; }
+      if (!inFence && f) { inFence = true; fenceRe = new RegExp("^[ \\t]{0,3}" + f[2][0] + "{" + f[2].length + ",}[ \\t]*$"); keep(l, i); continue; }
+      if (inFence) { if (fenceRe.test(l)) inFence = false; keep(l, i); continue; }
 
       let m = /^[ \t]{0,3}\[\^([^\]\s]+)\]:[ \t]*(.*)$/.exec(l);
       if (m) {
@@ -990,14 +1140,14 @@ const MD = (() => {
       }
       m = /^[ \t]{0,3}\[([^\^\]]+)\]:[ \t]*(\S+)(?:[ \t]+["'(](.*)["')])?[ \t]*$/.exec(l);
       if (m) { ctx.refs[m[1].toLowerCase()] = { href: m[2], title: m[3] || "" }; continue; }
-      kept.push(l);
+      keep(l, i);
     }
 
-    let html = parse(kept.join("\n"), ctx);
+    let html = parse(kept.join("\n"), ctx, map);
 
     /* 脚注セクション */
     if (ctx.footnoteOrder.length) {
-      let fn = '<section class="footnotes"><ol>';
+      let fn = '<!--b:--><section class="footnotes"><ol>';
       ctx.footnoteOrder.forEach(id => {
         fn += '<li id="fn-' + esc(id) + '">' + parse(ctx.footnotes[id] || "", ctx) +
               ' <a href="#fnref-' + esc(id) + '" title="本文へ戻る">↩</a></li>';
@@ -1008,7 +1158,7 @@ const MD = (() => {
     /* フロントマター */
     let fmHtml = "";
     if (fm.meta && fm.meta.length) {
-      fmHtml = '<div class="fm"><dl>' + fm.meta.map(([k, v]) =>
+      fmHtml = "<!--b:0:" + fmLines + '--><div class="fm"><dl>' + fm.meta.map(([k, v]) =>
         "<dt>" + esc(k) + "</dt><dd>" + inline(esc(v).replace(/&amp;/g, "&"), ctx) + "</dd>").join("") + "</dl></div>";
     }
 
@@ -1033,13 +1183,17 @@ const MD = (() => {
     main: $("#main"), reader: $(".reader"), content: $("#content"), empty: $("#empty"),
     toc: $("#toc"), files: $("#fileList"), title: $("#docTitle"), meta: $("#docMeta"),
     drop: $("#dropzone"), toast: $("#toast"), picker: $("#picker"), pop: $("#pop"),
-    grid: $("#bodyGrid"), src: $("#src"), mode: $("#segMode"), save: $("#btnSave")
+    grid: $("#bodyGrid"), src: $("#src"), save: $("#btnSave"),
+    fab: $("#fab"), acc: $("#acc"), accMore: $("#accMore"), kitState: $("#kitState"), full: $("#btnFull")
   };
   const narrow = matchMedia("(max-width:820px)");
 
   const state = {
-    docs: [],          /* {name, size, text, handle?, mtime?, dirty?} */
+    docs: [],          /* {name, size, text, saved, hist, hi, handle?, mtime?} */
     active: -1,
+    edit: null,        /* 段落の編集中: {s, e, ta, eol, s0, e0, n0}（s〜e は元の行範囲） */
+    full: false,       /* 全文を編集中 */
+    tapEdit: false,    /* スマホ：タップした段落を編集する */
     opts: {
       breaks:  store.get("breaks", false),
       numAlign:store.get("numAlign", true),
@@ -1047,7 +1201,6 @@ const MD = (() => {
       width:   store.get("width", "w-normal"),
       theme:   store.get("theme", "auto"),
       sidebar: store.get("sidebar", true) && !narrow.matches,
-      mode:    store.get("mode", "view"),   /* view / edit / split。端末ごとに覚える */
       watch:   false
     }
   };
@@ -1059,10 +1212,10 @@ const MD = (() => {
     els.reader.classList.remove("w-narrow", "w-normal", "w-wide");
     els.reader.classList.add(state.opts.width);
     els.grid.classList.toggle("no-side", !state.opts.sidebar);
-    els.grid.classList.remove("m-view", "m-edit", "m-split");
-    els.grid.classList.add("m-" + state.opts.mode);
-    els.mode.querySelectorAll("button").forEach(b =>
-      b.classList.toggle("on", b.dataset.v === state.opts.mode));
+    document.body.classList.toggle("sheet", state.opts.sidebar && narrow.matches);
+    els.grid.classList.toggle("full", state.full);
+    els.full.classList.toggle("on", state.full);
+    els.full.textContent = state.full ? "全文の編集を閉じる" : "全文を編集";
     $("#btnSide").setAttribute("aria-pressed", String(state.opts.sidebar));
     $("#swBreaks").setAttribute("aria-pressed", String(state.opts.breaks));
     $("#swNum").setAttribute("aria-pressed", String(state.opts.numAlign));
@@ -1080,11 +1233,17 @@ const MD = (() => {
   }
 
   /* --------------------------------------------------------------- 描画 */
+  const cur = () => state.docs[state.active];
+  const isDirty = d => d.text !== d.saved;
+
   function render(keepScroll) {
-    const doc = state.docs[state.active];
+    const doc = cur();
+    state.edit = null;
+    document.body.classList.toggle("has-doc", !!doc);
     els.grid.classList.toggle("has-doc", !!doc);
-    els.mode.hidden = els.save.hidden = !doc;
+    els.save.hidden = !doc;
     if (!doc) {
+      state.full = false; applyOpts(); syncEditing();
       els.empty.hidden = false; els.reader.hidden = true;
       renderFiles();
       els.title.innerHTML = ""; els.toc.innerHTML = '<div class="side-empty">見出しがここに並びます</div>';
@@ -1092,17 +1251,38 @@ const MD = (() => {
     }
     els.empty.hidden = true; els.reader.hidden = false;
     if (els.src.value !== doc.text) { els.src.value = doc.text; els.src.scrollTop = 0; }
-    els.save.classList.toggle("dirty", !!doc.dirty);
 
     const t0 = performance.now();
     const res = MD.render(doc.text, state.opts);
-    els.content.innerHTML = res.html;
-    const ms = Math.max(1, Math.round(performance.now() - t0));
+    els.content.innerHTML = doc.text.trim() ? res.html
+      : '<!--b:0:1--><p class="side-empty">まだ何も書かれていません。ダブルクリック（スマホは「✎ 編集」）で書き始められます。</p>';
+    markBlocks();
+    renderSide(doc, res, Math.max(1, Math.round(performance.now() - t0)));
 
-    /* タイトル */
-    const h1 = els.content.querySelector("h1");
-    document.title = (h1 ? h1.textContent.replace(/^#/, "") : doc.name) + " — Markdown Viewer";
-    els.title.innerHTML = "<b>" + MD.escapeHtml(doc.name) + "</b>";
+    if (!keepScroll) els.main.scrollTop = 0;
+    hookCopy();
+    spy();
+    syncEditing();
+  }
+
+  /* パーサが書いた <!--b:開始:終了--> を、続く要素の data-s / data-e に移す */
+  function markBlocks() {
+    let r = null;
+    for (const n of els.content.childNodes) {
+      if (n.nodeType === 8) {
+        const m = /^b:(\d*):?(\d*)$/.exec(n.data);
+        if (m) r = m[1] ? m : null;
+      } else if (n.nodeType === 1 && r) { n.dataset.s = r[1]; n.dataset.e = r[2]; }
+    }
+  }
+
+  /* 本文以外（題名・目次・文書メタ・保存ボタン）。段落の編集中は本文を描き直さず、ここだけ更新する */
+  function renderSide(doc, res, ms) {
+    const h1 = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(res.html);
+    document.title = (h1 ? h1[1].replace(/<[^>]+>/g, "").replace(/^#/, "") : doc.name) + " — Markdown Viewer";
+    els.title.innerHTML = "<b>" + MD.escapeHtml(doc.name) + "</b>" +
+      (isDirty(doc) ? ' <span class="dot" title="保存していない変更があります">●</span>' : "");
+    els.save.classList.toggle("dirty", isDirty(doc));
 
     /* 目次 */
     if (res.toc.length) {
@@ -1122,15 +1302,12 @@ const MD = (() => {
       chars.toLocaleString() + " 文字",
       "約 " + Math.max(1, Math.round(words / 500)) + " 分で読了",
       res.toc.length + " 見出し",
-      els.content.querySelectorAll("table").length + " 表 / " +
-      els.content.querySelectorAll("pre").length + " コードブロック",
-      "描画 " + ms + "ms"
-    ].map(s => "<span>" + s + "</span>").join("");
+      (res.html.match(/<table/g) || []).length + " 表 / " +
+      (res.html.match(/<pre/g) || []).length + " コードブロック"
+    ].concat(ms ? ["描画 " + ms + "ms"] : []).map(s => "<span>" + s + "</span>").join("");
 
-    if (!keepScroll) els.main.scrollTop = 0;
     renderFiles();
-    hookCopy();
-    spy();
+    updateUndo();
   }
 
   const fmtSize = n => n < 1024 ? n + " B" : n < 1048576
@@ -1144,7 +1321,7 @@ const MD = (() => {
     els.files.innerHTML = state.docs.map((d, i) =>
       '<button class="file-item' + (i === state.active ? " active" : "") + '" data-i="' + i + '">' +
       '<span class="nm" title="' + MD.escapeHtml(d.name) + '">' + MD.escapeHtml(d.name) + "</span>" +
-      (d.dirty ? '<span class="dot" title="保存していない変更があります">●</span>' : "") +
+      (isDirty(d) ? '<span class="dot" title="保存していない変更があります">●</span>' : "") +
       '<span class="x" data-close="' + i + '" title="閉じる">×</span></button>').join("");
   }
 
@@ -1184,7 +1361,8 @@ const MD = (() => {
 
   function addDoc(name, text, size, handle) {
     const idx = state.docs.findIndex(d => d.name === name);
-    const doc = { name, text, size: size != null ? size : new Blob([text]).size, handle };
+    const doc = { name, text, size: size != null ? size : new Blob([text]).size, handle,
+                  saved: text, hist: [text], hi: 0 };
     if (idx >= 0) { state.docs[idx] = doc; state.active = idx; }
     else { state.docs.push(doc); state.active = state.docs.length - 1; }
     render();
@@ -1276,40 +1454,400 @@ const MD = (() => {
   /* ------------------------------------------------------------ 編集 */
   /* 保存していない編集は下書きとしてこの端末に残し、次に開いたとき復元する */
   function saveDrafts() {
-    store.set("drafts", state.docs.filter(d => d.dirty).map(d => ({ name: d.name, text: d.text })));
+    store.set("drafts", state.docs.filter(isDirty).map(d => ({ name: d.name, text: d.text })));
   }
 
+  const linesOf = t => t.split(/\r?\n/);
+  const eolOf = t => /\r\n/.test(t) ? "\r\n" : "\n";
+
+  /* ---- 戻る / やり直す：文書ごとに全文の履歴を持つ（段落を移っても戻れるように） */
+  function snap(doc) {
+    if (doc.hist[doc.hi] === doc.text) return;
+    doc.hist.splice(doc.hi + 1);
+    doc.hist.push(doc.text);
+    if (doc.hist.length > 300) doc.hist.shift();
+    doc.hi = doc.hist.length - 1;
+    updateUndo();
+  }
+  function updateUndo() {
+    const doc = cur();
+    const u = !!doc && (doc.hi > 0 || doc.text !== doc.hist[doc.hi]);
+    const r = !!doc && doc.hi < doc.hist.length - 1 && doc.text === doc.hist[doc.hi];
+    document.querySelectorAll('[data-k="undo"]').forEach(b => b.disabled = !u);
+    document.querySelectorAll('[data-k="redo"]').forEach(b => b.disabled = !r);
+  }
+
+  /* 打つたびに本文テキストを更新し、少し待ってから目次などと履歴・下書きに反映する */
+  let pend = null;
+  function flush() { if (pend) { clearTimeout(pend.t); const f = pend.f; pend = null; f(); } }
+  function setText(doc, text) {
+    doc.text = text;
+    doc.size = new Blob([text]).size;
+    if (pend) clearTimeout(pend.t);
+    const f = () => {
+      snap(doc); saveDrafts();
+      if (cur() !== doc) return;
+      if (state.edit) renderSide(doc, MD.render(doc.text, state.opts));
+      else render(true);
+    };
+    pend = { f, t: setTimeout(() => { pend = null; f(); }, 350) };
+    updateUndo();
+  }
+  /* キットの操作など、ひと区切りの変更 */
+  function setTextNow(doc, text) {
+    flush();
+    doc.text = text; doc.size = new Blob([text]).size;
+    snap(doc); saveDrafts();
+  }
+
+  function undoRedo(dir) {
+    const doc = cur(); if (!doc) return;
+    flush();
+    const i = doc.hi + dir;
+    if (i < 0 || i >= doc.hist.length) return;
+    const at = state.edit ? state.edit.s : -1;
+    doc.hi = i; doc.text = doc.hist[i]; doc.size = new Blob([doc.text]).size;
+    saveDrafts();
+    render(true);
+    if (at >= 0) reopenAt(at, true);
+    toast(dir < 0 ? "ひとつ戻しました" : "やり直しました");
+  }
+  function reopenAt(line, focus) {
+    const blocks = [...els.content.querySelectorAll(":scope > [data-s]")];
+    const el = blocks.find(b => +b.dataset.s <= line && line < +b.dataset.e) ||
+               blocks.find(b => +b.dataset.s >= line);
+    if (el) openBlock(el, focus);
+  }
+
+  /* ---- 段落の編集 */
+  function autoGrow(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + 2 + "px"; }
+
+  function openEdit(s, e, before, focus) {
+    const doc = cur(); if (!doc) return;
+    const lines = linesOf(doc.text);
+    const ta = document.createElement("textarea");
+    ta.className = "blk-edit";
+    ta.spellcheck = false;
+    ta.setAttribute("autocapitalize", "off");
+    ta.setAttribute("aria-label", (s + 1) + "行目からの段落を編集");
+    ta.value = lines.slice(s, e).join("\n");
+    const hint = document.createElement("div");
+    hint.className = "blk-hint";
+    hint.innerHTML = "<span>Esc か外側のクリックで確定</span><span>" + (s + 1) + " 行目〜</span>";
+    els.content.querySelectorAll(':scope > [data-s="' + s + '"]').forEach(n => n.classList.add("blk-hide"));
+    els.content.insertBefore(ta, before || null);
+    els.content.insertBefore(hint, ta.nextSibling);
+    state.edit = { s, e, ta, eol: eolOf(doc.text), s0: s, e0: e, n0: lines.length };
+    ta.addEventListener("input", onEditInput);
+    ta.addEventListener("keydown", onTab);
+    autoGrow(ta);
+    if (focus !== false) {
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+    ta.scrollIntoView({ block: "nearest" });
+    syncEditing();
+  }
+
+  function onEditInput() {
+    const ed = state.edit, doc = cur(); if (!ed || !doc) return;
+    const lines = linesOf(doc.text);
+    const nl = ed.ta.value.split("\n");
+    lines.splice(ed.s, ed.e - ed.s, ...nl);
+    ed.e = ed.s + nl.length;
+    autoGrow(ed.ta);
+    setText(doc, lines.join(ed.eol));
+  }
+
+  /* 確定して表示に戻す。空にした段落は行ごと消す */
+  function commitEdit() {
+    const ed = state.edit, doc = cur(); if (!ed || !doc) return;
+    flush();
+    if (!ed.ta.value.trim()) {
+      const lines = linesOf(doc.text);
+      let s = ed.s, e = ed.e;
+      if (e < lines.length && !lines[e].trim()) e++;
+      else if (s > 0 && !lines[s - 1].trim()) s--;
+      lines.splice(s, e - s);
+      setTextNow(doc, lines.join(ed.eol));
+    }
+    render(true);
+  }
+
+  /* 表示中の段落を編集に切り替える。別の段落を編集中なら、先に確定してから移る */
+  function openBlock(el, focus) {
+    let s = +el.dataset.s, e = +el.dataset.e;
+    const ed = state.edit;
+    if (ed) {
+      if (ed.ta === el) return;
+      const after = s >= ed.e0;
+      commitEdit();
+      if (after) s += linesOf(cur().text).length - ed.n0;
+      el = els.content.querySelector(':scope > [data-s="' + s + '"]');
+      if (!el) return;
+      e = +el.dataset.e;
+    }
+    openEdit(s, e, el, focus);
+  }
+
+  /* ＋段落：編集中の段落の下（なければ末尾）に空の段落を足して編集を始める */
+  function addPara() {
+    const doc = cur(); if (!doc) return;
+    if (state.full) { const t = els.src; t.focus(); t.setRangeText("\n\n", t.value.length, t.value.length, "end"); t.dispatchEvent(new Event("input")); return; }
+    if (state.edit && !state.edit.ta.value.trim()) { state.edit.ta.focus(); return; }
+    let at = state.edit ? state.edit.e : linesOf(doc.text).length;
+    if (state.edit) commitEdit();
+    const lines = linesOf(doc.text);
+    if (!doc.text.trim()) { lines.length = 0; at = 0; }
+    while (at > 0 && at === lines.length && !lines[at - 1].trim()) at--;
+    const add = at > 0 ? ["", ""] : [""];
+    lines.splice(at, 0, ...add);
+    setTextNow(doc, lines.join(eolOf(doc.text)));
+    render(true);
+    const s = at + add.length - 1;
+    const before = [...els.content.querySelectorAll(":scope > [data-s]")].find(b => +b.dataset.s > s);
+    openEdit(s, s + 1, before);
+  }
+
+  /* ---- 全文の編集（左右に並べる。スマホは全文だけ） */
+  /* textarea は改行を \n にそろえるので、元が CRLF なら戻してから反映する */
   els.src.addEventListener("input", () => {
-    const doc = state.docs[state.active]; if (!doc) return;
-    doc.text = els.src.value;
-    doc.size = new Blob([doc.text]).size;
-    if (!doc.dirty) { doc.dirty = true; renderFiles(); els.save.classList.add("dirty"); }
-    clearTimeout(els.src._t);
-    els.src._t = setTimeout(() => { render(true); saveDrafts(); }, 250);
+    const doc = cur(); if (!doc) return;
+    setText(doc, eolOf(doc.text) === "\r\n" ? els.src.value.replace(/\n/g, "\r\n") : els.src.value);
+  });
+  els.src.addEventListener("keydown", onTab);
+  function setFull(on) {
+    if (state.edit) commitEdit();
+    state.full = on; applyOpts(); render(true);
+    if (on) els.src.focus({ preventScroll: true });
+    else els.src.blur();
+  }
+  els.full.addEventListener("click", () => {
+    if (!cur()) return toast("まずファイルを開いてください");
+    closeSheet(); setFull(!state.full);
   });
 
-  /* Tab で字下げ（Shift+Tab で戻す）。リストの入れ子を作りやすくする */
-  els.src.addEventListener("keydown", e => {
+  /* 編集中かどうかを画面の各所に反映する */
+  function syncEditing() {
+    const on = !!state.edit || state.full;
+    document.body.classList.toggle("editing", on);
+    els.kitState.textContent = state.full ? "全文を編集中" : state.edit ? "編集中 — Esc で確定" : "段落をダブルクリックで編集";
+    els.content.classList.toggle("tap-edit", state.tapEdit);
+    els.fab.classList.toggle("on", state.tapEdit);
+    els.fab.textContent = state.tapEdit ? "✓ 読むだけに戻す" : "✎ 編集";
+    els.accMore.classList.remove("on");
+    placeAcc();
+  }
+
+  /* ---- 書式を整える操作（編集キット / キーボード上のキット / Tab） */
+  const activeTA = () => state.edit ? state.edit.ta : state.full ? els.src : null;
+
+  function selLines(t) {
+    const v = t.value, a = t.selectionStart, b = t.selectionEnd;
+    const ls = v.lastIndexOf("\n", a - 1) + 1;
+    let le = v.indexOf("\n", b > a && v[b - 1] === "\n" ? b - 1 : b);
+    if (le < 0) le = v.length;
+    return [ls, le];
+  }
+  function mapLines(t, fn) {
+    const [ls, le] = selLines(t), single = t.selectionStart === t.selectionEnd;
+    const src = t.value.slice(ls, le).split("\n");
+    t.setRangeText(fn(src).join("\n"), ls, le, single ? "end" : "select");
+  }
+  const LIST = /^(\s*)(?:[-*+] \[[ xX]\] |[-*+] |\d+[.)] )/;
+  const strip = l => l.replace(LIST, "$1");
+  const indentOf2 = l => /^\s*/.exec(l)[0];
+  function wrap(t, l, r, ph) {
+    const a = t.selectionStart, b = t.selectionEnd, v = t.value;
+    if (v.slice(a - l.length, a) === l && v.slice(b, b + r.length) === r) {
+      t.setRangeText(v.slice(a, b), a - l.length, b + r.length, "select"); return;
+    }
+    const sel = v.slice(a, b) || ph || "";
+    t.setRangeText(l + sel + r, a, b, "end");
+    t.setSelectionRange(a + l.length, a + l.length + sel.length);
+  }
+  function insertBlock(t, text) {
+    const [, le] = selLines(t);
+    const line = t.value.slice(t.value.lastIndexOf("\n", le - 1) + 1, le);
+    const pre = line.trim() ? "\n\n" : (le > 0 ? "\n" : "");
+    t.setRangeText(pre + text, le, le, "end");
+  }
+  function indent(t, back) {
+    const a = t.selectionStart, b = t.selectionEnd;
+    if (!back && a === b && !LIST.test(t.value.slice(t.value.lastIndexOf("\n", a - 1) + 1))) {
+      t.setRangeText("  ", a, b, "end"); return;
+    }
+    mapLines(t, ls => ls.map(l => back ? l.replace(/^ {1,2}/, "") : "  " + l));
+  }
+
+  const KIT = {
+    h: t => mapLines(t, ls => ls.map(l => {
+      const m = /^(#{1,6}) +/.exec(l);
+      const n = m ? m[1].length : 0;
+      const body = strip(l).trimStart().replace(/^#{1,6} +/, "");
+      return n >= 3 ? body : "#".repeat(n + 1) + " " + body;
+    })),
+    b: t => wrap(t, "**", "**", "太字"),
+    strike: t => wrap(t, "~~", "~~", "取り消し"),
+    mark: t => wrap(t, "==", "==", "マーカー"),
+    code: t => wrap(t, "`", "`", "code"),
+    link: t => {
+      const a = t.selectionStart, b = t.selectionEnd, sel = t.value.slice(a, b);
+      t.setRangeText("[" + (sel || "リンク") + "](https://)", a, b, "end");
+      const u = a + (sel || "リンク").length + 3;
+      t.setSelectionRange(u, u + 8);
+    },
+    img: t => {
+      const a = t.selectionStart;
+      t.setRangeText("![説明](https://)", a, t.selectionEnd, "end");
+      t.setSelectionRange(a + 6, a + 14);
+    },
+    ul: t => mapLines(t, ls => {
+      const all = ls.every(l => /^\s*[-*+] (?!\[[ xX]\] )/.test(l));
+      return ls.map(l => all ? strip(l) : indentOf2(l) + "- " + strip(l).trimStart());
+    }),
+    ol: t => mapLines(t, ls => {
+      const all = ls.every(l => /^\s*\d+[.)] /.test(l));
+      return ls.map((l, i) => all ? strip(l) : indentOf2(l) + (i + 1) + ". " + strip(l).trimStart());
+    }),
+    task: t => mapLines(t, ls => ls.map(l => {
+      if (/^\s*[-*+] \[ \] /.test(l)) return l.replace("[ ]", "[x]");
+      if (/^\s*[-*+] \[[xX]\] /.test(l)) return l.replace(/\[[xX]\]/, "[ ]");
+      return indentOf2(l) + "- [ ] " + strip(l).trimStart();
+    })),
+    quote: t => mapLines(t, ls => {
+      const all = ls.every(l => /^\s*> ?/.test(l));
+      return ls.map(l => all ? l.replace(/^(\s*)> ?/, "$1") : "> " + l);
+    }),
+    indent: t => indent(t, false),
+    outdent: t => indent(t, true),
+    table: t => insertBlock(t, "| 見出し | 見出し |\n| --- | --- |\n|  |  |"),
+    hr: t => insertBlock(t, "---\n"),
+  };
+
+  function kitAction(k) {
+    if (k === "more") { els.accMore.classList.toggle("on"); return; }
+    els.accMore.classList.remove("on");
+    if (k === "undo") return undoRedo(-1);
+    if (k === "redo") return undoRedo(1);
+    if (k === "done") { if (state.edit) commitEdit(); else if (state.full) setFull(false); document.activeElement.blur(); syncEditing(); return; }
+    if (!cur()) return toast("まずファイルを開いてください");
+    if (k === "para") { closeSheet(); return addPara(); }
+    const t = activeTA();
+    if (!t) return toast(touch ? "段落を長押しするか「✎ 編集」から編集を始めてください" : "段落をダブルクリックして編集を始めてください");
+    t.focus({ preventScroll: true });
+    KIT[k](t);
+    t.dispatchEvent(new Event("input"));
+    flush();
+  }
+
+  /* 押しても入力欄からフォーカスを奪わない（スマホでキーボードが閉じないように） */
+  document.querySelectorAll("[data-k]").forEach(btn => {
+    const run = () => kitAction(btn.dataset.k);
+    btn.addEventListener("mousedown", e => e.preventDefault());
+    btn.addEventListener("touchstart", e => e.preventDefault(), { passive: false });
+    btn.addEventListener("touchend", e => { e.preventDefault(); if (!btn.disabled) run(); });
+    btn.addEventListener("click", run);
+  });
+
+  function onTab(e) {
     if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
-    const t = els.src, v = t.value, a = t.selectionStart, b = t.selectionEnd;
-    const ls = v.lastIndexOf("\n", a - 1) + 1;
-    if (!e.shiftKey && a === b) { t.setRangeText("  ", a, b, "end"); }
-    else {
-      const le = b > a && v[b - 1] === "\n" ? b - 1 : b;
-      const block = v.slice(ls, le);
-      const out = e.shiftKey ? block.replace(/^ {1,2}/gm, "") : block.replace(/^/gm, "  ");
-      t.setRangeText(out, ls, le, a === b ? "end" : "select");
+    indent(e.target, e.shiftKey);
+    e.target.dispatchEvent(new Event("input"));
+  }
+
+  /* ---- 編集の始め方：PC はダブルクリック、スマホは長押しか「✎ 編集」のあとタップ */
+  const blockOf = t => t.closest && !t.closest(".blk-edit") ? t.closest("#content > [data-s]") : null;
+
+  els.content.addEventListener("dblclick", e => {
+    const el = blockOf(e.target); if (!el) return;
+    const sel = window.getSelection(); if (sel) sel.removeAllRanges();
+    openBlock(el);
+  });
+  els.content.addEventListener("click", e => {
+    if (!state.tapEdit) return;
+    const el = blockOf(e.target); if (!el) return;
+    e.preventDefault();
+    openBlock(el);
+  });
+  let hov = null;
+  els.content.addEventListener("mouseover", e => {
+    const el = blockOf(e.target);
+    if (el === hov) return;
+    if (hov) hov.classList.remove("hov");
+    hov = el; if (el) el.classList.add("hov");
+  });
+  els.content.addEventListener("mouseleave", () => { if (hov) hov.classList.remove("hov"); hov = null; });
+
+  /* 長押し。キーボードはタイマーからは開けないので、指を離したときに入力欄へフォーカスする */
+  let lp = null;
+  els.content.addEventListener("touchstart", e => {
+    const el = e.touches.length === 1 && blockOf(e.target); if (!el || state.tapEdit) return;
+    const t = e.touches[0];
+    lp = { x: t.clientX, y: t.clientY, fired: false, timer: setTimeout(() => {
+      lp.fired = true;
+      const sel = window.getSelection(); if (sel) sel.removeAllRanges();
+      openBlock(el, false);
+    }, 480) };
+  }, { passive: true });
+  els.content.addEventListener("touchmove", e => {
+    if (!lp || lp.fired) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - lp.x) + Math.abs(t.clientY - lp.y) > 10) { clearTimeout(lp.timer); lp = null; }
+  }, { passive: true });
+  const lpEnd = e => {
+    if (!lp) return;
+    clearTimeout(lp.timer);
+    if (lp.fired && state.edit) {
+      e.preventDefault();
+      const ta = state.edit.ta;
+      ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length);
     }
-    t.dispatchEvent(new Event("input"));
+    lp = null;
+  };
+  els.content.addEventListener("touchend", lpEnd);
+  els.content.addEventListener("touchcancel", lpEnd);
+  els.content.addEventListener("contextmenu", e => { if (touch && blockOf(e.target)) e.preventDefault(); });
+
+  els.fab.addEventListener("click", () => {
+    state.tapEdit = !state.tapEdit; syncEditing();
+    if (state.tapEdit) toast("編集したい段落をタップしてください");
   });
 
-  function setMode(m) {
-    state.opts.mode = m; store.set("mode", m); applyOpts();
-    if (m !== "view" && state.docs[state.active] && !narrow.matches) els.src.focus();
+  /* 本文の外側を押したら確定（PC） */
+  document.addEventListener("mousedown", e => {
+    if (!state.edit || touch) return;
+    if (e.target.closest(".blk-edit, #content > [data-s], .sidebar, .topbar, .pop, .acc, .toast")) return;
+    commitEdit();
+  });
+
+  /* ---- スマホ：キーボードのすぐ上にキットを置く */
+  function placeAcc() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const off = window.innerHeight - (vv.offsetTop + vv.height);
+    els.acc.style.transform = off > 1 ? "translateY(" + (-off) + "px)" : "";
   }
-  els.mode.addEventListener("click", e => {
-    const b = e.target.closest("button"); if (b) setMode(b.dataset.v);
+  if (window.visualViewport) {
+    visualViewport.addEventListener("resize", placeAcc);
+    visualViewport.addEventListener("scroll", placeAcc);
+  }
+
+  /* ---- スマホ：下から出るシート（目次とファイル） */
+  function closeSheet() {
+    if (!narrow.matches || !state.opts.sidebar) return;
+    state.opts.sidebar = false; applyOpts();
+  }
+  $("#scrim").addEventListener("click", closeSheet);
+
+  /* ---- 新規 */
+  $("#btnNew").addEventListener("click", () => {
+    let n = "無題.md", i = 2;
+    while (state.docs.some(d => d.name === n)) n = "無題" + (i++) + ".md";
+    addDoc(n, "");
+    closeSheet();
+    openEdit(0, 1, null);
   });
 
   /* ------------------------------------------------------------ 保存 */
@@ -1327,12 +1865,15 @@ const MD = (() => {
   }
 
   function saved(doc, msg) {
-    doc.dirty = false;
-    saveDrafts(); render(true); toast(msg);
+    doc.saved = doc.text;
+    saveDrafts();
+    if (state.edit) renderSide(doc, MD.render(doc.text, state.opts)); else render(true);
+    toast(msg);
   }
 
   async function saveDoc() {
-    const doc = state.docs[state.active]; if (!doc) return;
+    const doc = cur(); if (!doc) return;
+    flush();
     const name = /\.[^.]+$/.test(doc.name) ? doc.name : doc.name + ".md";
     try {
       if (doc.handle && doc.handle.createWritable) {
@@ -1365,14 +1906,14 @@ const MD = (() => {
   els.save.addEventListener("click", saveDoc);
 
   window.addEventListener("beforeunload", e => {
-    if (state.docs.some(d => d.dirty)) { e.preventDefault(); e.returnValue = ""; }
+    if (state.docs.some(isDirty)) { e.preventDefault(); e.returnValue = ""; }
   });
 
   /* ------------------------------------------------------------ 自動更新 */
   setInterval(async () => {
     if (!state.opts.watch) return;
     const doc = state.docs[state.active];
-    if (!doc || !doc.handle || doc.dirty) return;
+    if (!doc || !doc.handle || isDirty(doc) || state.edit) return;
     try {
       const f = await doc.handle.getFile();
       if (doc.mtime && f.lastModified === doc.mtime) return;
@@ -1380,7 +1921,8 @@ const MD = (() => {
       doc.mtime = f.lastModified;
       if (first) return;
       const y = els.main.scrollTop;
-      doc.text = await readFile(f); doc.size = f.size;
+      doc.text = doc.saved = await readFile(f); doc.size = f.size;
+      snap(doc);
       render(); els.main.scrollTop = y;
       toast("ファイルの更新を反映しました");
     } catch (e) {}
@@ -1447,16 +1989,16 @@ const MD = (() => {
     if (x) {
       e.stopPropagation();
       const i = +x.dataset.close;
-      if (state.docs[i].dirty && !confirm(state.docs[i].name + " は保存していません。閉じますか？")) return;
+      if (isDirty(state.docs[i]) && !confirm(state.docs[i].name + " は保存していません。閉じますか？")) return;
       state.docs.splice(i, 1); saveDrafts();
       if (state.active >= state.docs.length) state.active = state.docs.length - 1;
       render(); return;
     }
     const b = e.target.closest(".file-item");
-    if (b) { state.active = +b.dataset.i; render(); }
+    if (b) { state.active = +b.dataset.i; render(); closeSheet(); }
   });
   $("#btnClear").addEventListener("click", () => {
-    if (state.docs.some(d => d.dirty) && !confirm("保存していないファイルがあります。すべて閉じますか？")) return;
+    if (state.docs.some(isDirty) && !confirm("保存していないファイルがあります。すべて閉じますか？")) return;
     state.docs = []; state.active = -1; saveDrafts(); render();
   });
 
@@ -1465,6 +2007,7 @@ const MD = (() => {
     e.preventDefault();
     const el = document.getElementById(a.dataset.id);
     if (el) els.main.scrollTo({ top: el.offsetTop - 24, behavior: "smooth" });
+    closeSheet();
   });
   els.content.addEventListener("click", e => {
     const a = e.target.closest('a[href^="#"]'); if (!a) return;
@@ -1477,8 +2020,13 @@ const MD = (() => {
       if (e.key === "o") { e.preventDefault(); pick(); }
       if (e.key === "b") { e.preventDefault(); $("#btnSide").click(); }
       if (e.key === "s") { e.preventDefault(); saveDoc(); }
+      if (e.key === "z" || e.key === "Z") { e.preventDefault(); undoRedo(e.shiftKey ? 1 : -1); }
+      if (e.key === "y") { e.preventDefault(); undoRedo(1); }
     }
-    if (e.key === "Escape") els.pop.classList.remove("on");
+    if (e.key === "Escape") {
+      els.pop.classList.remove("on");
+      if (state.edit) { e.preventDefault(); commitEdit(); }
+    }
   });
 
   /* -------------------------------------------------------------- サンプル */
@@ -1557,7 +2105,7 @@ const MD = (() => {
   const drafts = store.get("drafts", []);
   for (const d of Array.isArray(drafts) ? drafts : []) {
     if (d && typeof d.name === "string" && typeof d.text === "string") {
-      state.docs.push({ name: d.name, text: d.text, size: new Blob([d.text]).size, dirty: true });
+      state.docs.push({ name: d.name, text: d.text, size: new Blob([d.text]).size, saved: null, hist: [d.text], hi: 0 });
       state.active = state.docs.length - 1;
     }
   }
