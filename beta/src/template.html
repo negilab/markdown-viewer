@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Markdown Editor β</title>
+<meta name="description" content="Notion のように、記号を見ずにMarkdownを書ける編集画面の試作です。">
+<style>
+/* ---------- 色（ビューアと同じ青を基調にする） ---------- */
+:root{
+  color-scheme:light;
+  --bg:#ffffff; --bg-sub:#f7f8fa; --bg-sunken:#eef0f4; --bg-elev:#ffffff;
+  --fg:#1f2328; --fg-muted:#61697a; --fg-faint:#8b93a3;
+  --border:#dfe3e9; --border-strong:#c6ccd6;
+  --accent:#2f6feb; --accent-soft:#e8effd; --accent-fg:#ffffff;
+  --shadow-sm:0 1px 2px rgba(16,22,34,.06), 0 1px 3px rgba(16,22,34,.05);
+  --shadow-md:0 6px 20px rgba(16,22,34,.10), 0 2px 6px rgba(16,22,34,.06);
+  --sans:"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic UI", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  --mono:ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", "BIZ UDGothic", Menlo, monospace;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0f1216; --bg-sub:#14181e; --bg-sunken:#0b0e12; --bg-elev:#171c23;
+  --fg:#dfe3ea; --fg-muted:#9aa4b4; --fg-faint:#6d7787;
+  --border:#262d37; --border-strong:#38414e;
+  --accent:#6ea1ff; --accent-soft:#17233a; --accent-fg:#0f1216;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 8px 24px rgba(0,0,0,.45);
+}
+@media (prefers-color-scheme:dark){
+  :root[data-theme="auto"]{
+    color-scheme:dark;
+    --bg:#0f1216; --bg-sub:#14181e; --bg-sunken:#0b0e12; --bg-elev:#171c23;
+    --fg:#dfe3ea; --fg-muted:#9aa4b4; --fg-faint:#6d7787;
+    --border:#262d37; --border-strong:#38414e;
+    --accent:#6ea1ff; --accent-soft:#17233a; --accent-fg:#0f1216;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 8px 24px rgba(0,0,0,.45);
+  }
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:none;padding:0}
+a{color:var(--accent)}
+
+/* ---------- 上のバー ---------- */
+.top{
+  position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:8px;
+  height:52px;padding:0 14px;padding-top:env(safe-area-inset-top);
+  background:var(--bg-elev);border-bottom:1px solid var(--border);box-shadow:var(--shadow-sm);
+}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;white-space:nowrap;color:var(--fg);text-decoration:none}
+.brand svg{width:22px;height:22px;color:var(--accent)}
+.brand small{font-weight:700;font-size:11px;color:var(--accent);background:var(--accent-soft);padding:2px 6px;border-radius:6px}
+.name{flex:1;min-width:0;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:6px}
+.name .dot{color:var(--accent);font-size:10px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 11px;
+  border:1px solid var(--border);border-radius:8px;background:var(--bg-elev);color:var(--fg-muted);font-size:13px;white-space:nowrap;
+}
+.btn:hover{background:var(--bg-sub);color:var(--fg);border-color:var(--border-strong)}
+.btn.icon{width:32px;padding:0}
+.btn svg{width:16px;height:16px}
+.btn:disabled{opacity:.4;cursor:default}
+#btnSave.dirty{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+
+/* ---------- 編集部品の色と文字をビューアに合わせる（部品のテーマより後に効くよう .wrap を付ける） ---------- */
+.wrap .milkdown{
+  --crepe-color-background:var(--bg);
+  --crepe-color-on-background:var(--fg);
+  --crepe-color-surface:var(--bg-sub);
+  --crepe-color-surface-low:var(--bg-sunken);
+  --crepe-color-on-surface:var(--fg);
+  --crepe-color-on-surface-variant:var(--fg-muted);
+  --crepe-color-outline:var(--border-strong);
+  --crepe-color-primary:var(--accent);
+  --crepe-color-secondary:var(--accent-soft);
+  --crepe-color-on-secondary:var(--fg);
+  --crepe-color-inverse:var(--fg);
+  --crepe-color-on-inverse:var(--bg);
+  --crepe-color-inline-code:#d1405b;
+  --crepe-color-hover:var(--bg-sub);
+  --crepe-color-selected:var(--accent-soft);
+  --crepe-color-inline-area:var(--bg-sunken);
+  --crepe-font-title:var(--sans);
+  --crepe-font-default:var(--sans);
+  --crepe-font-code:var(--mono);
+  --crepe-shadow-1:var(--shadow-sm);
+  --crepe-shadow-2:var(--shadow-md);
+}
+.wrap{max-width:860px;margin:0 auto;padding:24px 0 40vh}
+.wrap .milkdown .ProseMirror{padding:24px 64px 60px 88px;line-height:1.85}
+.wrap .milkdown .ProseMirror h1,.wrap .milkdown .ProseMirror h2{border-bottom:1px solid var(--border);padding-bottom:.3em;font-weight:700;letter-spacing:.01em}
+.wrap .milkdown .ProseMirror h1{font-size:30px;line-height:1.35;margin-top:8px}
+.wrap .milkdown .ProseMirror h2{font-size:23px;line-height:1.4;margin-top:28px}
+.wrap .milkdown .ProseMirror h3{font-size:19px;font-weight:700;margin-top:22px}
+.foot{max-width:860px;margin:0 auto;padding:0 88px 40px;font-size:12px;color:var(--fg-faint)}
+.foot a{color:var(--fg-muted)}
+
+/* ---------- ドロップ・お知らせ ---------- */
+.dropzone{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:color-mix(in srgb, var(--bg) 80%, transparent);border:3px dashed var(--accent)}
+.dropzone.on{display:grid}
+.dropzone p{font-size:18px;font-weight:700;color:var(--accent)}
+.toast{
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);z-index:70;
+  background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13px;
+  box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;white-space:nowrap;
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- スマホ ---------- */
+@media (max-width:820px){
+  .top{gap:6px;padding:0 10px}
+  .brand .label,.btn .label{display:none}
+  .btn{width:34px;padding:0}
+  .wrap{padding-top:8px}
+  .wrap .milkdown .ProseMirror{padding:16px 20px 60px 36px;font-size:16px}
+  .wrap .milkdown .ProseMirror h1{font-size:25px}
+  .wrap .milkdown .ProseMirror h2{font-size:20px}
+  .foot{padding:0 20px 40px}
+  .toast{bottom:auto;top:62px;transform:translate(-50%,-10px)}
+  /* 書式のバー（TopBar）は、上のバーのすぐ下に貼りつける */
+  .wrap .milkdown .milkdown-top-bar{position:sticky;top:52px;z-index:20}
+  .wrap .milkdown .milkdown-top-bar{padding:2px 6px}
+  .wrap .milkdown .milkdown-top-bar .top-bar-item{margin:1px;width:34px;height:34px}
+  .wrap .milkdown .milkdown-top-bar .top-bar-divider{margin:4px 3px}
+  .wrap .milkdown .milkdown-top-bar .top-bar-heading-selector{padding:1px}
+}
+</style>
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./" title="ビューアに戻る">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M6 15V9l3 3 3-3v6"/><path d="M16 9v4m0 0 2-2m-2 2-2-2"/></svg>
+    <span class="label">Markdown Editor</span><small>β</small>
+  </a>
+  <div class="name" id="docName"></div>
+  <button class="btn icon" id="btnUndo" title="戻る (Ctrl+Z)">↶</button>
+  <button class="btn icon" id="btnRedo" title="やり直す (Ctrl+Shift+Z)">↷</button>
+  <button class="btn" id="btnSave" title="保存 (Ctrl+S)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 3v5h7V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg>
+    <span class="label">保存</span>
+  </button>
+  <button class="btn" id="btnOpen" title="ファイルを開く (Ctrl+O)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    <span class="label">開く</span>
+  </button>
+  <button class="btn" id="btnNew" title="新しく書く">＋<span class="label">新規</span></button>
+  <button class="btn icon" id="btnTheme" title="テーマ切り替え">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+  </button>
+</header>
+
+<main class="wrap"><div id="editor"></div></main>
+<p class="foot">Markdown Editor <b class="app-ver"></b> ・ 試作です。読み込んだファイルはどこにも送信されません。 ・ <a href="./">いつものビューアに戻る</a></p>
+
+<div class="dropzone" id="dropzone"><p>ここにドロップ</p></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="picker" accept=".md,.markdown,.mdx,.mkd,.txt,text/markdown,text/plain" hidden>
+<script>/*__JS__*/</script>
+</body>
+</html>
