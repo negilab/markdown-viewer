@@ -1196,6 +1196,26 @@ const MD = (() => {
     if (t && t.trim()) { addDoc("クリップボード.md", t); toast("クリップボードから読み込みました"); }
   });
 
+  /* URL の # で受け取る（iPhone のショートカットなどから）
+     例: index.html#name=メモ.md&md=<URLエンコードした本文> */
+  function openFromHash() {
+    const h = location.hash.slice(1);
+    if (!/(^|&)md=/.test(h)) return;
+    const p = {};
+    for (const kv of h.split("&")) {
+      const i = kv.indexOf("=");
+      if (i < 0) continue;
+      try { p[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); }
+      catch (e) { toast("URLから読み込めませんでした"); return; }
+    }
+    /* 本文を履歴に残さないよう、読み込んだら URL から外す */
+    history.replaceState(null, "", location.pathname + location.search);
+    if (!p.md || !p.md.trim()) return;
+    addDoc(p.name || "共有.md", p.md);
+    toast("共有されたファイルを開きました");
+  }
+  window.addEventListener("hashchange", openFromHash);
+
   /* ------------------------------------------------------------ 自動更新 */
   setInterval(async () => {
     if (!state.opts.watch) return;
@@ -1365,6 +1385,7 @@ const MD = (() => {
   /* -------------------------------------------------------------- 起動 */
   applyOpts();
   render();
+  openFromHash();
 })();
 </script>
 </body>
