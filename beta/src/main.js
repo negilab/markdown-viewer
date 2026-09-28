@@ -30,7 +30,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.2 (2026-09-28)";
+const VERSION = "β0.3 (2026-09-28)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -83,9 +83,18 @@ async function openText(name, text, handle, restoredMd) {
   doc.fm = m ? m[0] : "";
   const body = (m ? text.slice(m[0].length) : text).replace(/\r\n?/g, "\n");
 
+  await makeEditor(restoredMd != null ? restoredMd : body);
+  /* 部品が書き直した形を「保存済み」の基準にする（開いただけで ● が付かないように） */
+  doc.saved = restoredMd != null ? null : doc.md;
+  renderTitle(); updateUndo();
+  if (!touch) els.root.querySelector(".ProseMirror")?.focus();
+}
+
+/* 編集部品を作り直す（ファイルを開いたとき・表示のみから戻ったとき） */
+async function makeEditor(md) {
   if (crepe) await crepe.destroy();
   els.root.innerHTML = "";
-  crepe = new CrepeBuilder({ root: els.root, defaultValue: restoredMd != null ? restoredMd : body });
+  crepe = new CrepeBuilder({ root: els.root, defaultValue: md });
   crepe.addFeature(cursor).addFeature(listItem).addFeature(linkTooltip).addFeature(table)
        .addFeature(imageBlock, JA.imageBlock).addFeature(placeholder, JA.placeholder)
        .addFeature(blockEdit, JA.blockEdit).addFeature(toolbar, JA.toolbar);
@@ -104,12 +113,7 @@ async function openText(name, text, handle, restoredMd) {
   });
   await crepe.create();
   crepe.setReadonly(readonly);
-  /* 部品が書き直した形を「保存済み」の基準にする（開いただけで ● が付かないように） */
-  const now = crepe.getMarkdown();
-  doc.saved = restoredMd != null ? null : now;
-  doc.md = now;
-  renderTitle(); updateUndo();
-  if (!touch) crepe.editor.ctx && els.root.querySelector(".ProseMirror")?.focus();
+  doc.md = crepe.getMarkdown();
 }
 
 /* ------------------------------------------------------------ 日本語の表示 */
@@ -154,14 +158,24 @@ function followCaret() {
 }
 
 /* ------------------------------------------------------------ 表示のみ */
-function setReadonly(on) {
+async function setReadonly(on) {
   readonly = on;
   document.body.classList.toggle("readonly", on);
   els.view.setAttribute("aria-pressed", String(on));
   els.view.title = on ? "編集に戻る" : "表示のみ（編集しない）";
   const label = els.view.querySelector(".label"); if (label) label.textContent = on ? "編集する" : "表示のみ";
-  if (crepe) crepe.setReadonly(on);
-  if (on && document.activeElement) document.activeElement.blur();
+  if (!crepe) return;
+  if (on) {
+    crepe.setReadonly(true);
+    if (document.activeElement) document.activeElement.blur();   /* キーボードを閉じる */
+    return;
+  }
+  /* 部品の書式バーは、一度読むだけにすると編集に戻しても出てこない（部品側の不具合）。
+     なので今の本文で編集部品を作り直す。表示位置は保つ。戻る・やり直すの履歴はここで区切られる */
+  const y = window.scrollY, saved = doc.saved;
+  await makeEditor(doc.md);
+  doc.saved = saved; renderTitle();
+  window.scrollTo(0, y);
 }
 els.view.addEventListener("click", () => { setReadonly(!readonly); toast(readonly ? "表示のみにしました" : "編集できるようにしました"); });
 
