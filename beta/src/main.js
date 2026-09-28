@@ -17,6 +17,7 @@ import { callCommand } from "@milkdown/kit/utils";
 import { remarkStringifyOptionsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { blockServiceInstance } from "@milkdown/kit/plugin/block";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
+import * as drive from "./drive.js";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
 import "@milkdown/crepe/theme/common/block-edit.css";
@@ -30,7 +31,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.3 (2026-09-28)";
+const VERSION = "β0.4 (2026-09-28)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -55,7 +56,7 @@ function toast(msg) {
 /* ------------------------------------------------------------ 文書 */
 /* 編集部品はフロントマター（先頭の --- で囲んだ情報欄）を扱えないので、外しておいて保存時に戻す */
 const FM = /^﻿?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
-const doc = { name: "", fm: "", eol: "\n", handle: null, saved: "", md: "" };
+const doc = { name: "", fm: "", eol: "\n", handle: null, drive: null, saved: "", md: "" };
 let crepe = null;
 
 const fullText = () => {
@@ -66,6 +67,12 @@ const isDirty = () => doc.md !== doc.saved;
 
 function renderTitle() {
   els.name.innerHTML = "";
+  if (doc.drive) {
+    const g = document.createElement("span");
+    g.className = "gd"; g.title = "Googleドライブの原本を編集中（保存すると原本に上書き）";
+    g.innerHTML = DRIVE_ICON;
+    els.name.append(g);
+  }
   els.name.append(doc.name || "無題.md");
   if (isDirty()) {
     const dot = document.createElement("span");
@@ -78,7 +85,7 @@ function renderTitle() {
 
 async function openText(name, text, handle, restoredMd) {
   const m = FM.exec(text);
-  doc.name = name; doc.handle = handle || null;
+  doc.name = name; doc.handle = handle || null; doc.drive = null;
   doc.eol = /\r\n/.test(text) ? "\r\n" : "\n";
   doc.fm = m ? m[0] : "";
   const body = (m ? text.slice(m[0].length) : text).replace(/\r\n?/g, "\n");
@@ -198,12 +205,13 @@ els.redo.addEventListener("click", () => run(redoCommand)); keep(els.redo);
 
 /* ------------------------------------------------------------ 下書き */
 function saveDraft() {
-  store.set("draft", isDirty() ? { name: doc.name, fm: doc.fm, eol: doc.eol, md: doc.md } : null);
+  store.set("draft", isDirty() ? { name: doc.name, fm: doc.fm, eol: doc.eol, md: doc.md, drive: doc.drive } : null);
 }
 window.addEventListener("beforeunload", e => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
 
 /* ------------------------------------------------------------ 開く */
 const OK = /\.(md|markdown|mkd|mdown|mdx|txt|text)$/i;
+const DRIVE_ICON = '<svg viewBox="0 0 87.3 78" aria-hidden="true"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>';
 const readFile = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsText(f, "UTF-8"); });
 const confirmDiscard = () => !isDirty() || confirm("保存していない変更があります。破棄して開きますか？");
 
@@ -218,7 +226,34 @@ async function pick() {
     toast(f.name + " を開きました");
   } catch (e) { /* 取り消し */ }
 }
-$("#btnOpen").addEventListener("click", pick);
+/* 「開く」: ドライブが使えるときは、この端末かドライブかを選ぶ小さなメニューを出す */
+const menu = $("#openMenu");
+$("#btnOpen").addEventListener("click", e => {
+  if (!drive.configured()) return pick();
+  e.stopPropagation();
+  menu.hidden = !menu.hidden;
+});
+document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target)) menu.hidden = true; });
+$("#openLocal").addEventListener("click", () => { menu.hidden = true; pick(); });
+$("#openDrive").addEventListener("click", () => { menu.hidden = true; openDrive(); });
+
+/* ドライブから開く。ログインのポップアップを止められないよう、最初の await より前にトークンを頼む */
+async function openDrive() {
+  if (!confirmDiscard()) return;
+  if (!drive.ready()) { toast("Googleドライブの準備中です。少し待ってからもう一度"); return; }
+  const tp = drive.getToken();
+  try {
+    const r = await drive.open(tp);
+    if (!r) return;
+    if (!OK.test(r.meta.name) && !confirm(r.meta.name + " はMarkdownではないかもしれません。開きますか？")) return;
+    await openText(r.meta.name, r.text);
+    doc.drive = r.meta; renderTitle();
+    toast("ドライブの " + r.meta.name + " を開きました");
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    toast("ドライブから開けませんでした");
+  }
+}
 els.picker.addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f) return;
@@ -273,10 +308,25 @@ async function writeTo(handle, text) {
 }
 function saved(msg) { doc.saved = doc.md; saveDraft(); renderTitle(); toast(msg); }
 
+/* ドライブの原本に上書きする。ここも最初の await より前にトークンを頼む */
+async function saveDrive(text) {
+  if (!drive.ready()) { toast("Googleドライブの準備中です。少し待ってからもう一度"); return; }
+  const tp = drive.getToken();
+  try {
+    doc.drive = await drive.save(tp, doc.drive, text,
+      () => confirm("開いたあとに、ドライブ側でこのファイルが更新されています。上書きしますか？"));
+    saved("ドライブの原本に保存しました");
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    toast(e && e.message === "expired" ? "ログインが切れました。もう一度「保存」を押してください" : "ドライブに保存できませんでした");
+  }
+}
+
 async function saveDoc() {
   if (!crepe) return;
   doc.md = crepe.getMarkdown();
   const text = fullText();
+  if (doc.drive) return saveDrive(text);
   const name = /\.[^.]+$/.test(doc.name) ? doc.name : (doc.name || "無題") + ".md";
   try {
     if (doc.handle && doc.handle.createWritable) { await writeTo(doc.handle, text); return saved("上書き保存しました"); }
@@ -344,12 +394,15 @@ const WELCOME = [
   "",
 ].join("\n");
 
+drive.preload().catch(() => { /* 読めなければドライブのメニューは使えないだけ */ });
+
 (async () => {
   if (await openFromHash()) return;
   const d = store.get("draft", null);
   if (d && typeof d.md === "string") {
     doc.fm = d.fm || ""; await openText(d.name || "無題.md", "", null, d.md);
     doc.fm = d.fm || ""; doc.eol = d.eol || "\n";
+    if (d.drive && d.drive.id) { doc.drive = d.drive; renderTitle(); }
     toast("保存していない編集を復元しました");
     return;
   }

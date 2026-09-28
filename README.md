@@ -71,7 +71,9 @@ iPhoneでは、ショートカットAppで次のように組むと、ファイ�
 
 保存するとき、Markdownの書き方が少し整えられます(表の列幅がそろう、など)。先頭の `---` の情報欄(フロントマター)と改行コードはそのまま残します。
 
-右上の「表示のみ」で、編集せずに読むだけの表示に切り替えられます。文字は Inter と Noto Sans JP(Google Fonts)を使います。
+右上の「表示のみ」で、編集せずに読むだけの表示に切り替えられます。
+
+「開く」→「Googleドライブ」で、ドライブの原本を開いてそのまま上書き保存できます(iPhoneでもPCでも)。開いたあとにドライブ側で更新されていたら、上書きする前に確かめます。権限は「このページで選んだファイルだけ」(`drive.file`)です。使うには `beta/src/drive.js` の `GOOGLE` に、Google Cloud で作ったクライアントID・APIキー・プロジェクト番号を入れてビルドします。空のままならこのメニューは出ません。文字は Inter と Noto Sans JP(Google Fonts)を使います。
 
 編集部品は [Milkdown](https://milkdown.dev/)(MIT)です。`beta/` で `npm install && npm run build` を実行すると、部品ごと `beta.html` 1つにまとめ直します。
 
