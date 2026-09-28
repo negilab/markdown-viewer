@@ -103,7 +103,9 @@ a{color:var(--accent)}
 /* ============================================================
    App shell
    ============================================================ */
-.app{display:grid;grid-template-rows:auto 1fr;height:100dvh}
+.app{display:grid;grid-template-rows:auto 1fr;grid-template-columns:minmax(0,1fr);height:100dvh}
+/* 長いファイル名などで画面より広がらないように（中身の最小幅に引っぱられない） */
+.app > *,.topbar > *{min-width:0}
 
 .topbar{
   display:flex;align-items:center;gap:10px;
@@ -1181,7 +1183,7 @@ const MD = (() => {
 (() => {
   "use strict";
   /* 公開されている版が新しいかどうか、画面で確かめられるようにする。変更したら上げる */
-  const VERSION = "v2.0 (2026-09-28)";
+  const VERSION = "v2.1 (2026-09-28)";
   const $ = s => document.querySelector(s);
   document.querySelectorAll(".app-ver").forEach(e => e.textContent = VERSION);
   const store = {

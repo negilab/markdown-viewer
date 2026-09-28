@@ -106,6 +106,9 @@ a{color:var(--accent)}
 }
 .wrap{max-width:860px;margin:0 auto;padding:16px 0 40vh}
 .wrap .milkdown .ProseMirror{padding:20px 56px 60px 80px;line-height:1.8;font-size:15px}
+/* 長いパスや URL で画面より広がらないように折り返す */
+.wrap .milkdown .ProseMirror{overflow-wrap:anywhere}
+.wrap .milkdown .ProseMirror code{overflow-wrap:anywhere;word-break:break-all}
 .wrap .milkdown .ProseMirror h1,.wrap .milkdown .ProseMirror h2{border-bottom:1px solid var(--border);padding-bottom:.3em;font-weight:700;letter-spacing:.01em}
 .wrap .milkdown .ProseMirror h1{font-size:26px;line-height:1.35;margin-top:6px}
 .wrap .milkdown .ProseMirror h2{font-size:20px;line-height:1.4;margin-top:24px}
