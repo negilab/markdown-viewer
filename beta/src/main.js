@@ -14,7 +14,8 @@ import { imageBlock } from "@milkdown/crepe/feature/image-block";
 import { table } from "@milkdown/crepe/feature/table";
 import { topBar } from "@milkdown/crepe/feature/top-bar";
 import { callCommand } from "@milkdown/kit/utils";
-import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
+import { remarkStringifyOptionsCtx, editorViewCtx } from "@milkdown/kit/core";
+import { blockServiceInstance } from "@milkdown/kit/plugin/block";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
@@ -29,7 +30,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.1 (2026-09-28)";
+const VERSION = "β0.2 (2026-09-28)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -39,8 +40,9 @@ const touch = matchMedia("(pointer:coarse)").matches;
 
 const els = {
   root: $("#editor"), name: $("#docName"), save: $("#btnSave"), undo: $("#btnUndo"), redo: $("#btnRedo"),
-  toast: $("#toast"), picker: $("#picker"), drop: $("#dropzone"),
+  toast: $("#toast"), picker: $("#picker"), drop: $("#dropzone"), view: $("#btnView"),
 };
+let readonly = false;
 document.querySelectorAll(".app-ver").forEach(e => e.textContent = VERSION);
 
 function toast(msg) {
@@ -91,13 +93,17 @@ async function openText(name, text, handle, restoredMd) {
   if (touch) crepe.addFeature(topBar, JA.topBar);
   /* 保存するときの書き方を、よく使われる形にそろえる（箇条書きは「- 」、区切り線は「---」） */
   crepe.editor.config(ctx => ctx.update(remarkStringifyOptionsCtx, o => ({ ...o, bullet: "-", rule: "-" })));
-  crepe.on(api => api.markdownUpdated((ctx, md) => {
-    doc.md = md;
-    renderTitle(); updateUndo();
-    clearTimeout(openText.t);
-    openText.t = setTimeout(saveDraft, 400);
-  }));
+  crepe.on(api => {
+    api.markdownUpdated((ctx, md) => {
+      doc.md = md;
+      renderTitle(); updateUndo();
+      clearTimeout(openText.t);
+      openText.t = setTimeout(saveDraft, 400);
+    });
+    api.selectionUpdated(followCaret);
+  });
   await crepe.create();
+  crepe.setReadonly(readonly);
   /* 部品が書き直した形を「保存済み」の基準にする（開いただけで ● が付かないように） */
   const now = crepe.getMarkdown();
   doc.saved = restoredMd != null ? null : now;
@@ -129,9 +135,39 @@ const JA = {
                                 inlineUploadButton: "画像を選ぶ", blockUploadButton: "画像を選ぶ", blockCaptionPlaceholderText: "説明を書く" },
 };
 
+/* ------------------------------------------------------------ ⋮⋮ を入力位置に出す */
+/* 部品は ⋮⋮ をポインタの位置に出す作りで、ポインタのない iPhone ではずれて見えるので、
+   入力位置（カーソルのある行）の高さでポインタが動いたことにして出し直す */
+function followCaret() {
+  clearTimeout(followCaret.t);
+  followCaret.t = setTimeout(() => {
+    if (!crepe || readonly) return;
+    try {
+      crepe.editor.action(ctx => {
+        const view = ctx.get(editorViewCtx);
+        if (!view.hasFocus() || view.composing) return;
+        const c = view.coordsAtPos(view.state.selection.from);
+        ctx.get(blockServiceInstance.key).mousemoveCallback(view, { clientY: (c.top + c.bottom) / 2 });
+      });
+    } catch (e) { /* 描き直しの途中などは次の機会に */ }
+  }, 250);
+}
+
+/* ------------------------------------------------------------ 表示のみ */
+function setReadonly(on) {
+  readonly = on;
+  document.body.classList.toggle("readonly", on);
+  els.view.setAttribute("aria-pressed", String(on));
+  els.view.title = on ? "編集に戻る" : "表示のみ（編集しない）";
+  const label = els.view.querySelector(".label"); if (label) label.textContent = on ? "編集する" : "表示のみ";
+  if (crepe) crepe.setReadonly(on);
+  if (on && document.activeElement) document.activeElement.blur();
+}
+els.view.addEventListener("click", () => { setReadonly(!readonly); toast(readonly ? "表示のみにしました" : "編集できるようにしました"); });
+
 /* ------------------------------------------------------------ 戻る / やり直す */
 function run(cmd) {
-  if (!crepe) return;
+  if (!crepe || readonly) return;
   crepe.editor.action(callCommand(cmd.key));
 }
 function updateUndo() {
@@ -289,7 +325,8 @@ const WELCOME = [
   "| 操作 | PC | iPhone |",
   "| --- | --- | --- |",
   "| 保存 | Ctrl + S | 上の保存ボタン |",
-  "| 戻る | Ctrl + Z | 上の ↶ |",
+  "| 読むだけにする | 上の「表示のみ」 | 上の目のボタン |",
+  "| 戻る | Ctrl + Z | 上の戻るボタン |",
   "",
 ].join("\n");
 
