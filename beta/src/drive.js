@@ -9,9 +9,9 @@
 /* Google Cloud Console で作った値。どれもページの中で使う公開用の値で、秘密ではない
    （APIキーは negilab.github.io からしか使えないよう、Console 側で制限しておく） */
 export const GOOGLE = {
-  clientId: "",   /* OAuth クライアント ID（…apps.googleusercontent.com） */
-  apiKey: "",     /* API キー（Picker 用） */
-  appId: "",      /* プロジェクト番号（数字だけ） */
+  clientId: "735606358037-k1u1cesfr0u1hmummenlj1tbr35it7tr.apps.googleusercontent.com",   /* OAuth クライアント ID（…apps.googleusercontent.com） */
+  apiKey: "AIzaSyAUdDVF1N04ESyrJH7IlWm5oYR51JD7kN8",     /* API キー（Picker 用） */
+  appId: "735606358037",      /* プロジェクト番号（数字だけ） */
 };
 
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
