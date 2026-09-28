@@ -18,7 +18,7 @@ import { remarkStringifyOptionsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { blockServiceInstance } from "@milkdown/kit/plugin/block";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import * as drive from "./drive.js";
-import { ACTIONS, headingLevel, setHeading } from "./panel.js";
+import { ACTIONS, headingLevel, setHeading, indent, inCode } from "./panel.js";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
 import "@milkdown/crepe/theme/common/block-edit.css";
@@ -32,7 +32,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.5 (2026-09-28)";
+const VERSION = "β0.6 (2026-09-28)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -125,6 +125,21 @@ async function makeEditor(md) {
   schedulePanel();
 }
 
+/* ------------------------------------------------------------ Tab キー */
+/* 部品の標準では、下げられないときに Tab が本文へ空白を入れてしまい、ファイルにゴミが残る。
+   なので本文より先に受け取って、箇条書きの中なら字下げ / 戻す、それ以外は何もしない（コード枠は除く） */
+els.root.addEventListener("keydown", e => {
+  if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey || !crepe || readonly || e.isComposing) return;
+  let handled = false;
+  crepe.editor.action(ctx => {
+    if (inCode(ctx)) return;
+    handled = true;
+    const why = indent(ctx, e.shiftKey);
+    if (why) toast(why);
+  });
+  if (handled) { e.preventDefault(); e.stopPropagation(); schedulePanel(); }
+}, true);
+
 /* ------------------------------------------------------------ PC の編集パネル */
 /* 幅の広い PC だけ。開け閉めは端末ごとに覚える */
 const wide = matchMedia("(min-width:900px)");
@@ -157,6 +172,7 @@ document.querySelectorAll("#panel [data-a]").forEach(b => {
     const a = b.dataset.a;
     if (a === "undo") return run(undoCommand);
     if (a === "redo") return run(redoCommand);
+    if (a === "indent" || a === "outdent") return panelAction(ctx => { const why = indent(ctx, a === "outdent"); if (why) toast(why); });
     panelAction(ACTIONS[a].run);
   });
 });
@@ -214,6 +230,10 @@ const JA = {
   },
   toolbar: { boldLabel: "太字", italicLabel: "斜体", strikethroughLabel: "取り消し線", codeLabel: "コード", linkLabel: "リンク" },
   topBar: {
+    /* iPhone にはTabキーがないので、書式のバーに字下げ・戻すを足す */
+    buildTopBar: builder => builder.addGroup("indent", "字下げ")
+      .addItem("sink", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M11 12h10M11 18h10"/><path d="m3 10 4 3-4 3"/></svg>', active: () => false, onRun: ctx => { const why = indent(ctx, false); if (why) toast(why); } })
+      .addItem("lift", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M11 12h10M11 18h10"/><path d="m7 10-4 3 4 3"/></svg>', active: () => false, onRun: ctx => { const why = indent(ctx, true); if (why) toast(why); } }),
     headingOptions: [
       { label: "本文", level: null }, { label: "見出し 大", level: 1 },
       { label: "見出し 中", level: 2 }, { label: "見出し 小", level: 3 },

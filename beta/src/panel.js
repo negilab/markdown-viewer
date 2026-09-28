@@ -9,7 +9,7 @@ import {
   bulletListSchema, orderedListSchema, listItemSchema, blockquoteSchema, hrSchema,
   codeBlockSchema, paragraphSchema, headingSchema,
   wrapInBlockTypeCommand, addBlockTypeCommand, setBlockTypeCommand, selectTextNearPosCommand,
-  isMarkSelectedCommand,
+  isMarkSelectedCommand, sinkListItemCommand, liftListItemCommand,
 } from "@milkdown/kit/preset/commonmark";
 import { toggleStrikethroughCommand, strikethroughSchema, createTable } from "@milkdown/kit/preset/gfm";
 import { toggleLinkCommand } from "@milkdown/kit/component/link-tooltip";
@@ -42,6 +42,20 @@ export function headingLevel(ctx) {
 export function setHeading(ctx, level) {
   if (!level) call(ctx, setBlockTypeCommand, { nodeType: paragraphSchema.type(ctx) });
   else call(ctx, setBlockTypeCommand, { nodeType: headingSchema.type(ctx), attrs: { level } });
+}
+
+/* ---- 字下げ（箇条書き・番号・チェックの項目を1段下げる / 上げる） */
+export function inList(ctx) {
+  const { $from } = ctx.get(editorViewCtx).state.selection, li = listItemSchema.type(ctx);
+  for (let d = $from.depth; d > 0; d--) if ($from.node(d).type === li) return true;
+  return false;
+}
+export const inCode = ctx => ctx.get(editorViewCtx).state.selection.$from.parent.type === codeBlockSchema.type(ctx);
+/* 下げられなかった理由を返す（下げられたら null） */
+export function indent(ctx, back) {
+  if (!inList(ctx)) return "字下げは、箇条書き・番号・チェックの中で使えます";
+  if (back) return call(ctx, liftListItemCommand) ? null : "";
+  return call(ctx, sinkListItemCommand) ? null : "これ以上は下げられません（上の項目より1段深くまで）";
 }
 
 export const ACTIONS = {
