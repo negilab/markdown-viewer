@@ -18,6 +18,7 @@ import { remarkStringifyOptionsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { blockServiceInstance } from "@milkdown/kit/plugin/block";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import * as drive from "./drive.js";
+import { ACTIONS, headingLevel, setHeading } from "./panel.js";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
 import "@milkdown/crepe/theme/common/block-edit.css";
@@ -31,7 +32,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.4 (2026-09-28)";
+const VERSION = "β0.5 (2026-09-28)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -112,15 +113,91 @@ async function makeEditor(md) {
   crepe.on(api => {
     api.markdownUpdated((ctx, md) => {
       doc.md = md;
-      renderTitle(); updateUndo();
+      renderTitle(); updateUndo(); schedulePanel();
       clearTimeout(openText.t);
       openText.t = setTimeout(saveDraft, 400);
     });
-    api.selectionUpdated(followCaret);
+    api.selectionUpdated(() => { followCaret(); schedulePanel(); });
   });
   await crepe.create();
   crepe.setReadonly(readonly);
   doc.md = crepe.getMarkdown();
+  schedulePanel();
+}
+
+/* ------------------------------------------------------------ PC の編集パネル */
+/* 幅の広い PC だけ。開け閉めは端末ごとに覚える */
+const wide = matchMedia("(min-width:900px)");
+let panelOn = store.get("panel", true);
+function applyPanel() {
+  const can = !touch && wide.matches;
+  document.body.classList.toggle("can-panel", can);
+  document.body.classList.toggle("has-panel", can && panelOn);
+  $("#btnPanel").setAttribute("aria-pressed", String(can && panelOn));
+  schedulePanel();
+}
+wide.addEventListener("change", applyPanel);
+$("#btnPanel").addEventListener("click", () => { panelOn = !panelOn; store.set("panel", panelOn); applyPanel(); });
+
+/* ボタンを押しても本文のカーソルと選択が外れないように、押した瞬間の既定動作を止める */
+function panelAction(fn) {
+  if (!crepe || readonly) return;
+  try {
+    crepe.editor.action(ctx => {
+      fn(ctx);
+      /* 本文にカーソルがあるときは触らない（focus し直すと、直後の矢印キーが一瞬効かなくなる） */
+      const v = ctx.get(editorViewCtx); if (!v.hasFocus()) v.focus();
+    });
+  } catch (e) { toast("ここでは使えません"); }
+  schedulePanel();
+}
+document.querySelectorAll("#panel [data-a]").forEach(b => {
+  b.addEventListener("mousedown", e => e.preventDefault());
+  b.addEventListener("click", () => {
+    const a = b.dataset.a;
+    if (a === "undo") return run(undoCommand);
+    if (a === "redo") return run(redoCommand);
+    panelAction(ACTIONS[a].run);
+  });
+});
+document.querySelectorAll("#segHeading [data-h]").forEach(b => {
+  b.addEventListener("mousedown", e => e.preventDefault());
+  b.addEventListener("click", () => panelAction(ctx => setHeading(ctx, +b.dataset.h)));
+});
+
+/* いまのカーソル位置で効いている書式を光らせる。目次と文字数も更新する */
+function schedulePanel() {
+  cancelAnimationFrame(schedulePanel.f);
+  schedulePanel.f = requestAnimationFrame(updatePanel);
+}
+function updatePanel() {
+  if (!crepe || !document.body.classList.contains("has-panel")) return;
+  try {
+    crepe.editor.action(ctx => {
+      document.querySelectorAll("#panel [data-a]").forEach(b => {
+        const act = ACTIONS[b.dataset.a];
+        b.classList.toggle("on", !!(act && act.active && act.active(ctx)));
+      });
+      const lv = headingLevel(ctx);
+      document.querySelectorAll("#segHeading [data-h]").forEach(b => b.classList.toggle("on", +b.dataset.h === lv));
+    });
+  } catch (e) { /* 作り直しの途中 */ }
+  clearTimeout(updatePanel.t);
+  updatePanel.t = setTimeout(updateToc, 300);
+}
+function updateToc() {
+  const toc = $("#toc");
+  const hs = [...els.root.querySelectorAll(".ProseMirror > h1, .ProseMirror > h2, .ProseMirror > h3")].filter(h => h.textContent.trim());
+  toc.innerHTML = hs.length ? "" : '<div class="none">見出しを作ると、ここに並びます</div>';
+  hs.forEach(h => {
+    const a = document.createElement("a");
+    a.className = "l" + h.tagName[1];
+    a.textContent = h.textContent;
+    a.title = h.textContent;
+    a.addEventListener("click", () => window.scrollTo({ top: h.getBoundingClientRect().top + window.scrollY - 64, behavior: "smooth" }));
+    toc.append(a);
+  });
+  $("#stat").textContent = doc.md.replace(/\s/g, "").length.toLocaleString() + " 文字";
 }
 
 /* ------------------------------------------------------------ 日本語の表示 */
@@ -394,6 +471,7 @@ const WELCOME = [
   "",
 ].join("\n");
 
+applyPanel();
 drive.preload().catch(() => { /* 読めなければドライブのメニューは使えないだけ */ });
 
 (async () => {
