@@ -17,6 +17,8 @@ import { callCommand } from "@milkdown/kit/utils";
 import { remarkStringifyOptionsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { blockServiceInstance } from "@milkdown/kit/plugin/block";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
+import * as drive from "./drive.js";
+import { ACTIONS, headingLevel, setHeading, indent, inCode } from "./panel.js";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
 import "@milkdown/crepe/theme/common/block-edit.css";
@@ -30,7 +32,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.2 (2026-09-28)";
+const VERSION = "β0.6 (2026-09-28)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -55,7 +57,7 @@ function toast(msg) {
 /* ------------------------------------------------------------ 文書 */
 /* 編集部品はフロントマター（先頭の --- で囲んだ情報欄）を扱えないので、外しておいて保存時に戻す */
 const FM = /^﻿?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
-const doc = { name: "", fm: "", eol: "\n", handle: null, saved: "", md: "" };
+const doc = { name: "", fm: "", eol: "\n", handle: null, drive: null, saved: "", md: "" };
 let crepe = null;
 
 const fullText = () => {
@@ -66,6 +68,12 @@ const isDirty = () => doc.md !== doc.saved;
 
 function renderTitle() {
   els.name.innerHTML = "";
+  if (doc.drive) {
+    const g = document.createElement("span");
+    g.className = "gd"; g.title = "Googleドライブの原本を編集中（保存すると原本に上書き）";
+    g.innerHTML = DRIVE_ICON;
+    els.name.append(g);
+  }
   els.name.append(doc.name || "無題.md");
   if (isDirty()) {
     const dot = document.createElement("span");
@@ -78,14 +86,23 @@ function renderTitle() {
 
 async function openText(name, text, handle, restoredMd) {
   const m = FM.exec(text);
-  doc.name = name; doc.handle = handle || null;
+  doc.name = name; doc.handle = handle || null; doc.drive = null;
   doc.eol = /\r\n/.test(text) ? "\r\n" : "\n";
   doc.fm = m ? m[0] : "";
   const body = (m ? text.slice(m[0].length) : text).replace(/\r\n?/g, "\n");
 
+  await makeEditor(restoredMd != null ? restoredMd : body);
+  /* 部品が書き直した形を「保存済み」の基準にする（開いただけで ● が付かないように） */
+  doc.saved = restoredMd != null ? null : doc.md;
+  renderTitle(); updateUndo();
+  if (!touch) els.root.querySelector(".ProseMirror")?.focus();
+}
+
+/* 編集部品を作り直す（ファイルを開いたとき・表示のみから戻ったとき） */
+async function makeEditor(md) {
   if (crepe) await crepe.destroy();
   els.root.innerHTML = "";
-  crepe = new CrepeBuilder({ root: els.root, defaultValue: restoredMd != null ? restoredMd : body });
+  crepe = new CrepeBuilder({ root: els.root, defaultValue: md });
   crepe.addFeature(cursor).addFeature(listItem).addFeature(linkTooltip).addFeature(table)
        .addFeature(imageBlock, JA.imageBlock).addFeature(placeholder, JA.placeholder)
        .addFeature(blockEdit, JA.blockEdit).addFeature(toolbar, JA.toolbar);
@@ -96,20 +113,107 @@ async function openText(name, text, handle, restoredMd) {
   crepe.on(api => {
     api.markdownUpdated((ctx, md) => {
       doc.md = md;
-      renderTitle(); updateUndo();
+      renderTitle(); updateUndo(); schedulePanel();
       clearTimeout(openText.t);
       openText.t = setTimeout(saveDraft, 400);
     });
-    api.selectionUpdated(followCaret);
+    api.selectionUpdated(() => { followCaret(); schedulePanel(); });
   });
   await crepe.create();
   crepe.setReadonly(readonly);
-  /* 部品が書き直した形を「保存済み」の基準にする（開いただけで ● が付かないように） */
-  const now = crepe.getMarkdown();
-  doc.saved = restoredMd != null ? null : now;
-  doc.md = now;
-  renderTitle(); updateUndo();
-  if (!touch) crepe.editor.ctx && els.root.querySelector(".ProseMirror")?.focus();
+  doc.md = crepe.getMarkdown();
+  schedulePanel();
+}
+
+/* ------------------------------------------------------------ Tab キー */
+/* 部品の標準では、下げられないときに Tab が本文へ空白を入れてしまい、ファイルにゴミが残る。
+   なので本文より先に受け取って、箇条書きの中なら字下げ / 戻す、それ以外は何もしない（コード枠は除く） */
+els.root.addEventListener("keydown", e => {
+  if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey || !crepe || readonly || e.isComposing) return;
+  let handled = false;
+  crepe.editor.action(ctx => {
+    if (inCode(ctx)) return;
+    handled = true;
+    const why = indent(ctx, e.shiftKey);
+    if (why) toast(why);
+  });
+  if (handled) { e.preventDefault(); e.stopPropagation(); schedulePanel(); }
+}, true);
+
+/* ------------------------------------------------------------ PC の編集パネル */
+/* 幅の広い PC だけ。開け閉めは端末ごとに覚える */
+const wide = matchMedia("(min-width:900px)");
+let panelOn = store.get("panel", true);
+function applyPanel() {
+  const can = !touch && wide.matches;
+  document.body.classList.toggle("can-panel", can);
+  document.body.classList.toggle("has-panel", can && panelOn);
+  $("#btnPanel").setAttribute("aria-pressed", String(can && panelOn));
+  schedulePanel();
+}
+wide.addEventListener("change", applyPanel);
+$("#btnPanel").addEventListener("click", () => { panelOn = !panelOn; store.set("panel", panelOn); applyPanel(); });
+
+/* ボタンを押しても本文のカーソルと選択が外れないように、押した瞬間の既定動作を止める */
+function panelAction(fn) {
+  if (!crepe || readonly) return;
+  try {
+    crepe.editor.action(ctx => {
+      fn(ctx);
+      /* 本文にカーソルがあるときは触らない（focus し直すと、直後の矢印キーが一瞬効かなくなる） */
+      const v = ctx.get(editorViewCtx); if (!v.hasFocus()) v.focus();
+    });
+  } catch (e) { toast("ここでは使えません"); }
+  schedulePanel();
+}
+document.querySelectorAll("#panel [data-a]").forEach(b => {
+  b.addEventListener("mousedown", e => e.preventDefault());
+  b.addEventListener("click", () => {
+    const a = b.dataset.a;
+    if (a === "undo") return run(undoCommand);
+    if (a === "redo") return run(redoCommand);
+    if (a === "indent" || a === "outdent") return panelAction(ctx => { const why = indent(ctx, a === "outdent"); if (why) toast(why); });
+    panelAction(ACTIONS[a].run);
+  });
+});
+document.querySelectorAll("#segHeading [data-h]").forEach(b => {
+  b.addEventListener("mousedown", e => e.preventDefault());
+  b.addEventListener("click", () => panelAction(ctx => setHeading(ctx, +b.dataset.h)));
+});
+
+/* いまのカーソル位置で効いている書式を光らせる。目次と文字数も更新する */
+function schedulePanel() {
+  cancelAnimationFrame(schedulePanel.f);
+  schedulePanel.f = requestAnimationFrame(updatePanel);
+}
+function updatePanel() {
+  if (!crepe || !document.body.classList.contains("has-panel")) return;
+  try {
+    crepe.editor.action(ctx => {
+      document.querySelectorAll("#panel [data-a]").forEach(b => {
+        const act = ACTIONS[b.dataset.a];
+        b.classList.toggle("on", !!(act && act.active && act.active(ctx)));
+      });
+      const lv = headingLevel(ctx);
+      document.querySelectorAll("#segHeading [data-h]").forEach(b => b.classList.toggle("on", +b.dataset.h === lv));
+    });
+  } catch (e) { /* 作り直しの途中 */ }
+  clearTimeout(updatePanel.t);
+  updatePanel.t = setTimeout(updateToc, 300);
+}
+function updateToc() {
+  const toc = $("#toc");
+  const hs = [...els.root.querySelectorAll(".ProseMirror > h1, .ProseMirror > h2, .ProseMirror > h3")].filter(h => h.textContent.trim());
+  toc.innerHTML = hs.length ? "" : '<div class="none">見出しを作ると、ここに並びます</div>';
+  hs.forEach(h => {
+    const a = document.createElement("a");
+    a.className = "l" + h.tagName[1];
+    a.textContent = h.textContent;
+    a.title = h.textContent;
+    a.addEventListener("click", () => window.scrollTo({ top: h.getBoundingClientRect().top + window.scrollY - 64, behavior: "smooth" }));
+    toc.append(a);
+  });
+  $("#stat").textContent = doc.md.replace(/\s/g, "").length.toLocaleString() + " 文字";
 }
 
 /* ------------------------------------------------------------ 日本語の表示 */
@@ -126,6 +230,10 @@ const JA = {
   },
   toolbar: { boldLabel: "太字", italicLabel: "斜体", strikethroughLabel: "取り消し線", codeLabel: "コード", linkLabel: "リンク" },
   topBar: {
+    /* iPhone にはTabキーがないので、書式のバーに字下げ・戻すを足す */
+    buildTopBar: builder => builder.addGroup("indent", "字下げ")
+      .addItem("sink", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M11 12h10M11 18h10"/><path d="m3 10 4 3-4 3"/></svg>', active: () => false, onRun: ctx => { const why = indent(ctx, false); if (why) toast(why); } })
+      .addItem("lift", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M11 12h10M11 18h10"/><path d="m7 10-4 3 4 3"/></svg>', active: () => false, onRun: ctx => { const why = indent(ctx, true); if (why) toast(why); } }),
     headingOptions: [
       { label: "本文", level: null }, { label: "見出し 大", level: 1 },
       { label: "見出し 中", level: 2 }, { label: "見出し 小", level: 3 },
@@ -154,14 +262,24 @@ function followCaret() {
 }
 
 /* ------------------------------------------------------------ 表示のみ */
-function setReadonly(on) {
+async function setReadonly(on) {
   readonly = on;
   document.body.classList.toggle("readonly", on);
   els.view.setAttribute("aria-pressed", String(on));
   els.view.title = on ? "編集に戻る" : "表示のみ（編集しない）";
   const label = els.view.querySelector(".label"); if (label) label.textContent = on ? "編集する" : "表示のみ";
-  if (crepe) crepe.setReadonly(on);
-  if (on && document.activeElement) document.activeElement.blur();
+  if (!crepe) return;
+  if (on) {
+    crepe.setReadonly(true);
+    if (document.activeElement) document.activeElement.blur();   /* キーボードを閉じる */
+    return;
+  }
+  /* 部品の書式バーは、一度読むだけにすると編集に戻しても出てこない（部品側の不具合）。
+     なので今の本文で編集部品を作り直す。表示位置は保つ。戻る・やり直すの履歴はここで区切られる */
+  const y = window.scrollY, saved = doc.saved;
+  await makeEditor(doc.md);
+  doc.saved = saved; renderTitle();
+  window.scrollTo(0, y);
 }
 els.view.addEventListener("click", () => { setReadonly(!readonly); toast(readonly ? "表示のみにしました" : "編集できるようにしました"); });
 
@@ -184,12 +302,13 @@ els.redo.addEventListener("click", () => run(redoCommand)); keep(els.redo);
 
 /* ------------------------------------------------------------ 下書き */
 function saveDraft() {
-  store.set("draft", isDirty() ? { name: doc.name, fm: doc.fm, eol: doc.eol, md: doc.md } : null);
+  store.set("draft", isDirty() ? { name: doc.name, fm: doc.fm, eol: doc.eol, md: doc.md, drive: doc.drive } : null);
 }
 window.addEventListener("beforeunload", e => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
 
 /* ------------------------------------------------------------ 開く */
 const OK = /\.(md|markdown|mkd|mdown|mdx|txt|text)$/i;
+const DRIVE_ICON = '<svg viewBox="0 0 87.3 78" aria-hidden="true"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>';
 const readFile = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsText(f, "UTF-8"); });
 const confirmDiscard = () => !isDirty() || confirm("保存していない変更があります。破棄して開きますか？");
 
@@ -204,7 +323,34 @@ async function pick() {
     toast(f.name + " を開きました");
   } catch (e) { /* 取り消し */ }
 }
-$("#btnOpen").addEventListener("click", pick);
+/* 「開く」: ドライブが使えるときは、この端末かドライブかを選ぶ小さなメニューを出す */
+const menu = $("#openMenu");
+$("#btnOpen").addEventListener("click", e => {
+  if (!drive.configured()) return pick();
+  e.stopPropagation();
+  menu.hidden = !menu.hidden;
+});
+document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target)) menu.hidden = true; });
+$("#openLocal").addEventListener("click", () => { menu.hidden = true; pick(); });
+$("#openDrive").addEventListener("click", () => { menu.hidden = true; openDrive(); });
+
+/* ドライブから開く。ログインのポップアップを止められないよう、最初の await より前にトークンを頼む */
+async function openDrive() {
+  if (!confirmDiscard()) return;
+  if (!drive.ready()) { toast("Googleドライブの準備中です。少し待ってからもう一度"); return; }
+  const tp = drive.getToken();
+  try {
+    const r = await drive.open(tp);
+    if (!r) return;
+    if (!OK.test(r.meta.name) && !confirm(r.meta.name + " はMarkdownではないかもしれません。開きますか？")) return;
+    await openText(r.meta.name, r.text);
+    doc.drive = r.meta; renderTitle();
+    toast("ドライブの " + r.meta.name + " を開きました");
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    toast("ドライブから開けませんでした");
+  }
+}
 els.picker.addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f) return;
@@ -259,10 +405,25 @@ async function writeTo(handle, text) {
 }
 function saved(msg) { doc.saved = doc.md; saveDraft(); renderTitle(); toast(msg); }
 
+/* ドライブの原本に上書きする。ここも最初の await より前にトークンを頼む */
+async function saveDrive(text) {
+  if (!drive.ready()) { toast("Googleドライブの準備中です。少し待ってからもう一度"); return; }
+  const tp = drive.getToken();
+  try {
+    doc.drive = await drive.save(tp, doc.drive, text,
+      () => confirm("開いたあとに、ドライブ側でこのファイルが更新されています。上書きしますか？"));
+    saved("ドライブの原本に保存しました");
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    toast(e && e.message === "expired" ? "ログインが切れました。もう一度「保存」を押してください" : "ドライブに保存できませんでした");
+  }
+}
+
 async function saveDoc() {
   if (!crepe) return;
   doc.md = crepe.getMarkdown();
   const text = fullText();
+  if (doc.drive) return saveDrive(text);
   const name = /\.[^.]+$/.test(doc.name) ? doc.name : (doc.name || "無題") + ".md";
   try {
     if (doc.handle && doc.handle.createWritable) { await writeTo(doc.handle, text); return saved("上書き保存しました"); }
@@ -330,12 +491,16 @@ const WELCOME = [
   "",
 ].join("\n");
 
+applyPanel();
+drive.preload().catch(() => { /* 読めなければドライブのメニューは使えないだけ */ });
+
 (async () => {
   if (await openFromHash()) return;
   const d = store.get("draft", null);
   if (d && typeof d.md === "string") {
     doc.fm = d.fm || ""; await openText(d.name || "無題.md", "", null, d.md);
     doc.fm = d.fm || ""; doc.eol = d.eol || "\n";
+    if (d.drive && d.drive.id) { doc.drive = d.drive; renderTitle(); }
     toast("保存していない編集を復元しました");
     return;
   }

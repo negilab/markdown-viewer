@@ -24,5 +24,7 @@ const css = pick(".css").replace(/<\/style/gi, "<\\/style");
 const html = readFileSync("src/template.html", "utf8")
   .replace("/*__CSS__*/", () => css)
   .replace("/*__JS__*/", () => js);
-writeFileSync("../beta.html", html);
-console.log("beta.html", (html.length / 1024).toFixed(0) + " KB");
+/* OUT で出力先を変えられる（テスト用） */
+const OUT = process.env.OUT || "../beta.html";
+writeFileSync(OUT, html);
+console.log(OUT, (html.length / 1024).toFixed(0) + " KB");

@@ -69,6 +69,15 @@ a{color:var(--accent)}
 .sep{width:1px;height:18px;background:var(--border);margin:0 2px}
 .btn:disabled{opacity:.4;cursor:default}
 #btnSave.dirty{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+.name .gd svg{width:14px;height:14px;vertical-align:-2px;margin-right:5px}
+.open-wrap{position:relative;display:inline-flex}
+.menu{
+  position:absolute;top:36px;right:0;z-index:40;min-width:230px;padding:5px;
+  background:var(--bg-elev);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-md);
+}
+.menu button{display:block;width:100%;text-align:left;padding:9px 11px;border-radius:7px;font-size:13.5px;color:var(--fg)}
+.menu button:hover{background:var(--bg-sub)}
+.menu small{display:block;font-size:11px;color:var(--fg-faint);margin-top:2px}
 
 /* ---------- 編集部品の色と文字をビューアに合わせる（部品のテーマより後に効くよう .wrap を付ける） ---------- */
 .wrap .milkdown{
@@ -118,6 +127,51 @@ body.readonly .milkdown .milkdown-block-handle{display:none !important}
 .foot{max-width:860px;margin:0 auto;padding:0 80px 40px;font-size:12px;color:var(--fg-faint)}
 .foot a{color:var(--fg-muted)}
 
+/* ---------- PC の編集パネル ---------- */
+#btnPanel{display:none}
+body.can-panel #btnPanel{display:inline-flex}
+.panel{
+  position:fixed;left:0;top:46px;bottom:0;width:240px;z-index:25;overflow-y:auto;
+  background:var(--bg-sub);border-right:1px solid var(--border);font-size:13px;
+}
+body:not(.has-panel) .panel{display:none}
+body.has-panel .wrap,body.has-panel .foot{
+  margin-left:max(256px, calc((100% - 860px) / 2 + 120px));
+  max-width:min(860px, calc(100% - 272px));
+}
+.p-sec{padding:12px 12px 14px}
+.p-sec + .p-sec{border-top:1px solid var(--border)}
+.p-head{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--fg-faint);margin-bottom:8px}
+.p-head span{font-weight:400;letter-spacing:0}
+.p-label{font-size:11px;color:var(--fg-faint);margin:10px 0 5px}
+.p-row2{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.p-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.p-grid + .p-grid{margin-top:5px}
+.p-grid.g5{grid-template-columns:repeat(5,1fr);gap:4px}
+.p-grid.g5 .kb small{font-size:9px}
+.kb{
+  height:40px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elev);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  font-size:14px;line-height:1.1;color:var(--fg);
+}
+.kb small{font-size:9.5px;color:var(--fg-faint)}
+.kb:hover{border-color:var(--border-strong)}
+.kb.on{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.kb.on small{color:var(--accent)}
+.kb.wide{flex-direction:row;gap:6px;height:32px;font-size:12.5px;color:var(--fg-muted)}
+.kb.wide svg{width:15px;height:15px}
+.seg{display:grid;grid-template-columns:1.1fr 1.3fr .8fr .8fr;gap:2px;background:var(--bg-sunken);padding:2px;border-radius:8px}
+.seg button{padding:6px 0;border-radius:6px;font-size:12px;color:var(--fg-muted)}
+.seg button.on{background:var(--bg-elev);color:var(--fg);font-weight:600;box-shadow:var(--shadow-sm)}
+#toc a{display:block;padding:4px 8px;border-radius:6px;color:var(--fg-muted);text-decoration:none;line-height:1.45;cursor:pointer;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#toc a:hover{background:var(--bg-sunken);color:var(--fg)}
+#toc a.l2{padding-left:18px}
+#toc a.l3{padding-left:30px;font-size:12px}
+#toc .none{color:var(--fg-faint);font-size:12px;padding:2px 8px}
+.p-foot{font-size:11.5px;color:var(--fg-faint)}
+body.readonly .panel .edit-only{display:none}
+
 /* ---------- ドロップ・お知らせ ---------- */
 .dropzone{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:color-mix(in srgb, var(--bg) 80%, transparent);border:3px dashed var(--accent)}
 .dropzone.on{display:grid}
@@ -160,6 +214,7 @@ body.readonly .milkdown .milkdown-block-handle{display:none !important}
 </head>
 <body>
 <header class="top">
+  <button class="btn icon" id="btnPanel" title="編集パネル" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
   <a class="brand" href="./" title="ビューアに戻る">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M6 15V9l3 3 3-3v6"/><path d="M16 9v4m0 0 2-2m-2 2-2-2"/></svg>
     <span class="label">Markdown Editor</span><small>β</small>
@@ -173,18 +228,59 @@ body.readonly .milkdown .milkdown-block-handle{display:none !important}
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 3v5h7V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg>
     <span class="label">保存</span>
   </button>
+  <span class="open-wrap">
   <button class="btn" id="btnOpen" title="ファイルを開く (Ctrl+O)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
     <span class="label">開く</span>
   </button>
+  <div class="menu" id="openMenu" hidden>
+    <button id="openLocal">この端末のファイル</button>
+    <button id="openDrive">Googleドライブ<small>原本をそのまま編集・上書き保存</small></button>
+  </div>
+  </span>
   <button class="btn" id="btnNew" title="新しく書く">＋<span class="label">新規</span></button>
   <button class="btn icon" id="btnTheme" title="テーマ切り替え">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
   </button>
 </header>
 
+<aside class="panel" id="panel">
+  <section class="p-sec edit-only">
+    <div class="p-head">編集<span>文字を選んでから押す</span></div>
+    <div class="p-row2">
+      <button class="kb wide" data-a="undo" title="戻る (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>戻る</button>
+      <button class="kb wide" data-a="redo" title="やり直す (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>やり直す</button>
+    </div>
+    <div class="p-label">段落の種類</div>
+    <div class="seg" id="segHeading">
+      <button data-h="0">本文</button><button data-h="1">大見出し</button><button data-h="2">中</button><button data-h="3">小</button>
+    </div>
+    <div class="p-label">文字</div>
+    <div class="p-grid g5">
+      <button class="kb" data-a="bold" title="太字 (Ctrl+B)"><b>B</b><small>太字</small></button><button class="kb" data-a="italic" title="斜体 (Ctrl+I)"><i>I</i><small>斜体</small></button><button class="kb" data-a="strike" title="取り消し"><s>S</s><small>取り消し</small></button><button class="kb" data-a="code" title="コード">&lt;/&gt;<small>コード</small></button>
+    <button class="kb" data-a="link" title="リンク">🔗<small>リンク</small></button>
+    </div>
+    <div class="p-label">段落</div>
+    <div class="p-grid">
+      <button class="kb" data-a="ul" title="箇条書き">•<small>箇条書き</small></button><button class="kb" data-a="ol" title="番号">1.<small>番号</small></button><button class="kb" data-a="task" title="チェック">☐<small>チェック</small></button><button class="kb" data-a="quote" title="引用">❝<small>引用</small></button>
+    </div>
+    <div class="p-row2" style="margin-top:5px">
+      <button class="kb wide" data-a="indent" title="字下げ (Tab)">⇥ 字下げ</button>
+      <button class="kb wide" data-a="outdent" title="字下げを戻す (Shift+Tab)">⇤ 戻す</button>
+    </div>
+    <div class="p-label">入れる</div>
+    <div class="p-grid">
+      <button class="kb" data-a="table" title="表">▦<small>表</small></button><button class="kb" data-a="hr" title="区切り線">―<small>区切り線</small></button><button class="kb" data-a="codeblock" title="コード枠">{ }<small>コード枠</small></button><button class="kb" data-a="image" title="画像">🖼<small>画像</small></button>
+    </div>
+  </section>
+  <section class="p-sec toc-sec">
+    <div class="p-head">目次</div>
+    <nav id="toc"></nav>
+  </section>
+  <section class="p-sec p-foot"><span id="stat"></span></section>
+</aside>
 <main class="wrap"><div id="editor"></div></main>
-<p class="foot">Markdown Editor <b class="app-ver"></b> ・ 試作です。読み込んだファイルはどこにも送信されません。 ・ <a href="./">いつものビューアに戻る</a></p>
+<p class="foot">Markdown Editor <b class="app-ver"></b> ・ 試作です。ファイルのやりとりは、この端末と（ドライブから開いたときは）あなたのGoogleドライブの間だけです。 ・ <a href="./">いつものビューアに戻る</a></p>
 
 <div class="dropzone" id="dropzone"><p>ここにドロップ</p></div>
 <div class="toast" id="toast"></div>
