@@ -32,7 +32,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.9 (2026-09-29)";
+const VERSION = "β0.10 (2026-09-30)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -528,15 +528,21 @@ document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key === "o") { e.preventDefault(); pick(); }
 });
 
-/* ------------------------------------------------------------ テーマ */
-const themes = ["auto", "light", "dark"];
+/* ------------------------------------------------------------ 文字の大きさ・テーマ（端末ごとに覚える） */
 let theme = store.get("theme", "auto");
-const applyTheme = () => { document.documentElement.dataset.theme = theme; };
-$("#btnTheme").addEventListener("click", () => {
-  theme = themes[(themes.indexOf(theme) + 1) % 3]; store.set("theme", theme); applyTheme();
-  toast("テーマ: " + { auto: "自動", light: "ライト", dark: "ダーク" }[theme]);
-});
-applyTheme();
+let fs = store.get("fs", 15);
+function applyCfg() {
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.style.setProperty("--fs", fs + "px");
+  document.querySelectorAll("#segTheme button").forEach(b => b.classList.toggle("on", b.dataset.v === theme));
+  document.querySelectorAll("#segFs button").forEach(b => b.classList.toggle("on", +b.dataset.v === fs));
+}
+const cfgMenu = $("#cfgMenu");
+$("#btnCfg").addEventListener("click", e => { e.stopPropagation(); cfgMenu.hidden = !cfgMenu.hidden; });
+document.addEventListener("click", e => { if (!cfgMenu.hidden && !cfgMenu.contains(e.target)) cfgMenu.hidden = true; });
+$("#segTheme").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; theme = b.dataset.v; store.set("theme", theme); applyCfg(); });
+$("#segFs").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; fs = +b.dataset.v; store.set("fs", fs); applyCfg(); });
+applyCfg();
 
 /* ------------------------------------------------------------ 起動 */
 const WELCOME = [
