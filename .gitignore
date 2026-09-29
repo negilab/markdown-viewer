@@ -3,3 +3,4 @@ desktop.ini
 .DS_Store
 _preview_tmp.html
 *.tmp
+node_modules/

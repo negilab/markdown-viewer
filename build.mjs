@@ -1,5 +1,5 @@
-/* beta.html を作る: src/main.js と編集部品を1つの JS / CSS にまとめ、テンプレートに埋め込む
- *   cd beta && npm install && npm run build
+/* index.html を作る: src/main.js と編集部品を1つの JS / CSS にまとめ、テンプレートに埋め込む
+ *   npm install && npm run build
  */
 import { build } from "esbuild";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -25,6 +25,6 @@ const html = readFileSync("src/template.html", "utf8")
   .replace("/*__CSS__*/", () => css)
   .replace("/*__JS__*/", () => js);
 /* OUT で出力先を変えられる（テスト用） */
-const OUT = process.env.OUT || "../beta.html";
+const OUT = process.env.OUT || "index.html";
 writeFileSync(OUT, html);
 console.log(OUT, (html.length / 1024).toFixed(0) + " KB");

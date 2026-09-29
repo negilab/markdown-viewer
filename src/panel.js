@@ -53,9 +53,9 @@ export function inList(ctx) {
 export const inCode = ctx => ctx.get(editorViewCtx).state.selection.$from.parent.type === codeBlockSchema.type(ctx);
 /* 下げられなかった理由を返す（下げられたら null） */
 export function indent(ctx, back) {
-  if (!inList(ctx)) return "字下げは、箇条書き・番号・チェックの中で使えます";
+  if (!inList(ctx)) return "字下げは、箇条書き・番号付き・チェックの中で使えます";
   if (back) return call(ctx, liftListItemCommand) ? null : "";
-  return call(ctx, sinkListItemCommand) ? null : "これ以上は下げられません（上の項目より1段深くまで）";
+  return call(ctx, sinkListItemCommand) ? null : "上の項目より1段深くまでしか下げられません";
 }
 
 export const ACTIONS = {
