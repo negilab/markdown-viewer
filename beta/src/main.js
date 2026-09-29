@@ -32,7 +32,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.10 (2026-09-30)";
+const VERSION = "β0.11 (2026-09-30)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -531,9 +531,12 @@ document.addEventListener("keydown", e => {
 /* ------------------------------------------------------------ 文字の大きさ・テーマ（端末ごとに覚える） */
 let theme = store.get("theme", "auto");
 let fs = store.get("fs", 15);
+let cw = store.get("cw", 860);
 function applyCfg() {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.setProperty("--fs", fs + "px");
+  document.documentElement.style.setProperty("--cw", cw + "px");
+  document.querySelectorAll("#segCw button").forEach(b => b.classList.toggle("on", +b.dataset.v === cw));
   document.querySelectorAll("#segTheme button").forEach(b => b.classList.toggle("on", b.dataset.v === theme));
   document.querySelectorAll("#segFs button").forEach(b => b.classList.toggle("on", +b.dataset.v === fs));
 }
@@ -541,6 +544,7 @@ const cfgMenu = $("#cfgMenu");
 $("#btnCfg").addEventListener("click", e => { e.stopPropagation(); cfgMenu.hidden = !cfgMenu.hidden; });
 document.addEventListener("click", e => { if (!cfgMenu.hidden && !cfgMenu.contains(e.target)) cfgMenu.hidden = true; });
 $("#segTheme").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; theme = b.dataset.v; store.set("theme", theme); applyCfg(); });
+$("#segCw").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; cw = +b.dataset.v; store.set("cw", cw); applyCfg(); });
 $("#segFs").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; fs = +b.dataset.v; store.set("fs", fs); applyCfg(); });
 applyCfg();
 
