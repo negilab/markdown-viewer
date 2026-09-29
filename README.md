@@ -78,6 +78,26 @@ PCでは左に「編集パネル」が出ます。戻る・やり直す、段落
 
 「開く」→「Googleドライブ」で、ドライブの原本を開いてそのまま上書き保存できます(iPhoneでもPCでも)。開いたあとにドライブ側で更新されていたら、上書きする前に確かめます。権限は「このページで選んだファイルだけ」(`drive.file`)です。使うには `beta/src/drive.js` の `GOOGLE` に、Google Cloud で作ったクライアントID・APIキー・プロジェクト番号を入れてビルドします。空のままならこのメニューは出ません。文字は Inter と Noto Sans JP(Google Fonts)を使います。
 
+### PC のパスから開く(Claude Code のリンク)
+
+`beta.html#path=<PCのパス>` を開くと、Googleドライブの中から同じファイルを探して開きます。保存するとドライブ経由でPCの現物に戻ります。
+
+```
+https://negilab.github.io/markdown-viewer/beta.html#path=C:%5CUsers%5C81809%5Cclaude%5Cメモ.md
+```
+
+- `G:\マイドライブ\...` のファイルはそのまま開けます
+- `C:\...` のファイルは、Googleドライブのパソコン用アプリで、そのフォルダを「Google ドライブと同期」にしておく必要があります
+- ファイル名で探し、親フォルダの名前がパスと何段一致するかで選びます。同じくらい一致するものが複数あれば選んでもらいます
+- 初回はGoogleへのログインのボタンを押します。ログインは約1時間この端末に残り、その間はリンクを押すだけで開きます
+
+PC の Claude Code には、`CLAUDE.md`(全体用は `C:\Users\<名前>\.claude\CLAUDE.md`)に次のように書いておくと、リンクを付けてくれます。
+
+```
+mdファイルのパスを伝えるときは、次の形のリンクも添える（パスは URL エンコードする）:
+[📱 携帯で開く](https://negilab.github.io/markdown-viewer/beta.html#path=<パス>)
+```
+
 編集部品は [Milkdown](https://milkdown.dev/)(MIT)です。`beta/` で `npm install && npm run build` を実行すると、部品ごと `beta.html` 1つにまとめ直します。
 
 ## 表示
