@@ -32,7 +32,7 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
-const VERSION = "β0.8 (2026-09-28)";
+const VERSION = "β0.9 (2026-09-29)";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -382,6 +382,15 @@ window.addEventListener("drop", async e => {
 /* URL の # で受け取る（iPhone のショートカットから）: beta.html#name=メモ.md&md=<URLエンコードした本文> */
 async function openFromHash() {
   const h = location.hash.slice(1);
+  /* PC のパスで開く: beta.html#path=C:\Users\...\メモ.md（Claude Code が返すリンク） */
+  const pm = /(?:^|&)path=(.*)$/.exec(h);
+  if (pm) {
+    let path = pm[1];
+    try { path = decodeURIComponent(path); } catch (e) { /* エンコードされていないパスはそのまま使う */ }
+    history.replaceState(null, "", location.pathname + location.search);
+    openByPath(path);
+    return false;   /* 下ではいつもどおり編集画面を用意しておく（カードを閉じても空にならないように） */
+  }
   if (!/(^|&)md=/.test(h)) return false;
   const p = {};
   for (const kv of h.split("&")) {
@@ -395,6 +404,71 @@ async function openFromHash() {
   return true;
 }
 window.addEventListener("hashchange", openFromHash);
+
+/* ---- PC のパスから、Google ドライブの同じファイルを開く */
+const card = $("#pathCard");
+function showCard(html, buttons) {
+  card.querySelector(".pc-body").innerHTML = html;
+  const row = card.querySelector(".pc-btns"); row.innerHTML = "";
+  for (const [label, fn, primary] of buttons) {
+    const b = document.createElement("button");
+    b.className = "btn" + (primary ? " pri" : ""); b.textContent = label;
+    b.addEventListener("click", fn);
+    row.append(b);
+  }
+  card.hidden = false;
+}
+const hideCard = () => { card.hidden = true; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function openByPath(path) {
+  if (!drive.configured()) { toast("Googleドライブの設定がありません"); return; }
+  const name = drive.splitPath(path).pop() || path;
+  const head = '<b>' + esc(name) + '</b><small>' + esc(path) + '</small>';
+  /* ログイン済みなら、そのまま探して開く。まだなら、ログインの窓は押したときにしか開けないのでボタンを出す */
+  if (drive.hasToken()) {
+    await drive.preload().catch(() => {});
+    return findAndOpen(path, head);
+  }
+  showCard(head + '<p>Googleドライブの中から、このファイルを探して開きます。</p>', [
+    ["やめる", hideCard],
+    ["Googleドライブで開く", () => {
+      if (!drive.ready()) { toast("準備中です。少し待ってからもう一度"); return; }
+      findAndOpen(path, head, drive.getToken());
+    }, true],
+  ]);
+  drive.preload().catch(() => showCard(head + '<p>Googleの部品を読み込めませんでした。通信を確かめてください。</p>', [["閉じる", hideCard]]));
+}
+
+async function findAndOpen(path, head, tp) {
+  showCard(head + '<p>探しています…</p>', []);
+  try {
+    const r = await drive.findByPath(tp || drive.getToken(), path);
+    if (!r.found.length) {
+      return showCard(head + '<p>Googleドライブに見つかりませんでした。PC でこのファイルのあるフォルダが Googleドライブと同期されているか、同期が終わっているかを確かめてください。</p>',
+        [["閉じる", hideCard]]);
+    }
+    if (r.found.length > 1) {
+      /* 同じ名前・同じ場所に見えるファイルが複数あるときは選んでもらう */
+      return showCard(head + '<p>同じ名前のファイルが複数あります。開くものを選んでください。</p>',
+        r.found.slice(0, 6).map(f => [f.where || f.meta.name, () => openMeta(f.meta, tp)]).concat([["やめる", hideCard]]));
+    }
+    await openMeta(r.found[0].meta, tp);
+  } catch (e) {
+    if (e && e.name === "AbortError") return hideCard();
+    showCard(head + '<p>' + (e && e.message === "expired" ? "ログインが切れました。リンクをもう一度押してください。" : "開けませんでした。少し待ってからもう一度お試しください。") + '</p>', [["閉じる", hideCard]]);
+  }
+}
+
+async function openMeta(meta, tp) {
+  if (!confirmDiscard()) return hideCard();
+  showCard('<b>' + esc(meta.name) + '</b><p>読み込んでいます…</p>', []);
+  const text = await drive.read(tp || drive.getToken(), meta);
+  await openText(meta.name, text);
+  doc.drive = meta; renderTitle(); saveDraft();
+  hideCard();
+  toast("PC のファイルを開きました（保存するとPCにも戻ります）");
+}
 
 /* ------------------------------------------------------------ 保存 */
 async function writeTo(handle, text) {
