@@ -33,7 +33,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-09-30 15:00";
+const VERSION = "2026-09-30 16:00";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -396,12 +396,15 @@ window.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; els.
 window.addEventListener("drop", async e => {
   if (!e.dataTransfer || ![...(e.dataTransfer.types || [])].includes("Files")) return;
   e.preventDefault(); depth = 0; els.drop.classList.remove("on");
-  if (!confirmDiscard()) return;
-  let handle = null;
-  const it = e.dataTransfer.items && e.dataTransfer.items[0];
-  if (it && it.getAsFileSystemHandle) { try { const h = await it.getAsFileSystemHandle(); if (h && h.kind === "file") handle = h; } catch (err) {} }
+  /* 置いたファイルは、この処理の最初（await より前）でしか読めない。await のあとは中身が空になるので、先に取っておく */
   const f = e.dataTransfer.files[0];
+  const it = e.dataTransfer.items && e.dataTransfer.items[0];
+  const hp = it && it.getAsFileSystemHandle ? it.getAsFileSystemHandle().catch(() => null) : null;
   if (!f || !OK.test(f.name)) { toast("Markdown（.md）ではないため開けません。.md か .txt のファイルを置いてください"); return; }
+  if (!confirmDiscard()) return;
+  /* 上書き保存に使う手がかり（Chrome / Edge のみ） */
+  const h = hp && await hp;
+  const handle = h && h.kind === "file" ? h : null;
   await openText(f.name, await readFile(f), handle);
   toast(f.name + " を開きました");
 });
