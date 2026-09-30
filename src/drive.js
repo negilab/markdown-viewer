@@ -28,6 +28,18 @@ try {
 } catch (e) {}
 const keepToken = () => { try { localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, exp: tokenExp, scope: SCOPE })); } catch (e) {} };
 export const hasToken = () => !!token && Date.now() < tokenExp;
+
+/* 2回目からアカウントを選ばずに済むよう、使ったアカウントのメールアドレスをこの端末に覚えておく */
+const EMAIL_KEY = "mdb.gemail";
+const getEmail = () => { try { return localStorage.getItem(EMAIL_KEY) || ""; } catch (e) { return ""; } };
+const setEmail = v => { try { v ? localStorage.setItem(EMAIL_KEY, v) : localStorage.removeItem(EMAIL_KEY); } catch (e) {} };
+async function rememberEmail() {
+  if (getEmail()) return;
+  try {
+    const r = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)", { headers: { Authorization: "Bearer " + token } });
+    if (r.ok) setEmail(((await r.json()).user || {}).emailAddress || "");
+  } catch (e) { /* 覚えられなくても、次もアカウントを選べば使える */ }
+}
 let preloading = null;
 
 const loadScript = src => new Promise((res, rej) => {
@@ -52,10 +64,15 @@ async function load() {
     callback: r => {
       const p = pending; pending = null;
       if (!p) return;
-      if (r.error) return p.rej(new Error(r.error));
+      if (r.error) {
+        /* 覚えたアカウントで通らなかったときは、次はアカウントを選べるように忘れる */
+        setEmail("");
+        return p.rej(new Error(r.error));
+      }
       token = r.access_token;
       tokenExp = Date.now() + (Number(r.expires_in) || 3600) * 1000 - 60000;
       keepToken();
+      rememberEmail();
       p.res(token);
     },
     error_callback: e => { const p = pending; pending = null; if (p) p.rej(Object.assign(new Error(e.type || "popup"), { name: "AbortError" })); },
@@ -69,7 +86,10 @@ export function getToken() {
   if (!tokenClient) return Promise.reject(new Error("not ready"));
   return new Promise((res, rej) => {
     pending = { res, rej };
-    tokenClient.requestAccessToken();
+    /* 覚えたアカウントがあれば、アカウントを選ぶ画面を出さずに頼む（ログインの窓はすぐ閉じる）。
+       ない・通らなかったときは、Google の標準どおりアカウントを選んでもらう */
+    const email = getEmail();
+    tokenClient.requestAccessToken(email ? { prompt: "", login_hint: email } : { prompt: "select_account" });
   });
 }
 
