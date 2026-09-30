@@ -33,7 +33,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-09-30 12:30";
+const VERSION = "2026-09-30 13:30";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -139,6 +139,18 @@ els.root.addEventListener("keydown", e => {
     if (why) toast(why);
   });
   if (handled) { e.preventDefault(); e.stopPropagation(); schedulePanel(); }
+}, true);
+
+/* ------------------------------------------------------------ iPhone の変換確定の改行 */
+/* iPhone の日本語入力は、変換の確定に改行キーを使う。編集部品はこの改行を無視するが、Safari が同じ改行を
+   「段落の追加」としても実行してしまい、確定のたびに下へ空の段落が増えていた。
+   変換中と、確定した直後（0.5秒以内）の1回目だけ、この段落の追加を止める。2回目以降の改行はふだんどおり効く */
+let composing = false, composeEnd = 0;
+els.root.addEventListener("compositionstart", () => { composing = true; }, true);
+els.root.addEventListener("compositionend", () => { composing = false; composeEnd = Date.now(); }, true);
+els.root.addEventListener("beforeinput", e => {
+  if (e.inputType !== "insertParagraph" && e.inputType !== "insertLineBreak") return;
+  if (composing || e.isComposing || Date.now() - composeEnd < 500) { composeEnd = 0; e.preventDefault(); }
 }, true);
 
 /* ------------------------------------------------------------ PC の編集パネル */
