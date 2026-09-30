@@ -129,6 +129,12 @@ a{color:var(--accent)}
 .wrap .milkdown .milkdown-table-block table{width:max-content;min-width:100%}
 .wrap .milkdown .milkdown-table-block th,.wrap .milkdown .milkdown-table-block td{min-width:7em;max-width:22em;overflow-wrap:normal;word-break:normal}
 
+/* 書式のバー（iPhone）: 箇条書き・挿入などのボタンは最初から黒。
+   文字の書式（太字・斜体・取り消し線・コード。見出しの選択と区切り線に続く 3〜6 番目）だけは、オフは灰色・オンで色が付く */
+.wrap .milkdown .milkdown-top-bar .top-bar-item svg{color:var(--fg);fill:var(--fg)}
+.wrap .milkdown .milkdown-top-bar .top-bar-inner > .top-bar-item:nth-child(-n+6):not(.active) svg{color:var(--crepe-color-outline);fill:var(--crepe-color-outline)}
+.wrap .milkdown .milkdown-top-bar .top-bar-item.active svg{color:var(--crepe-color-primary);fill:var(--crepe-color-primary)}
+
 /* 設定メニュー（文字の大きさ・テーマ） */
 .cfg-wrap{position:relative;display:inline-flex}
 .menu .row{padding:6px 8px 8px}
