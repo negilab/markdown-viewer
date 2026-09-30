@@ -33,7 +33,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-09-29";
+const VERSION = "2026-09-30";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -261,6 +261,17 @@ function followCaret() {
       });
     } catch (e) { /* 描き直しの途中などは次の機会に */ }
   }, 250);
+}
+
+/* ------------------------------------------------------------ キーボードが出ているときの上の帯 */
+/* iPhone ではキーボードが出ると、ページはそのままで「見えている範囲」だけが下へずれ、上端に貼りつけた帯が画面の外へ出る。
+   見えている範囲のずれを --vv に入れて、帯をその分だけ下げる */
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const follow = () => document.documentElement.style.setProperty("--vv", Math.max(0, Math.round(vv.offsetTop)) + "px");
+  vv.addEventListener("resize", follow);
+  vv.addEventListener("scroll", follow);
+  follow();
 }
 
 /* ------------------------------------------------------------ 閲覧（書き換えを止める） */

@@ -43,6 +43,8 @@
 *,*::before,*::after{box-sizing:border-box}
 /* 高さを画面に固定すると、1画面ぶん下へ進んだところで上の帯が外れて流れていくので min-height にする */
 html,body{min-height:100%}
+/* 画面より広いものがあっても、ページ全体は左右に動かさない（clip はスクロールの箱を作らないので、上の帯の sticky も効いたまま） */
+html,body{overflow-x:clip}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;cursor:pointer;background:none;border:none;padding:0}
 a{color:var(--accent)}
@@ -50,6 +52,8 @@ a{color:var(--accent)}
 /* ---------- 上のバー ---------- */
 .top{
   position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:8px;
+  /* iPhone でキーボードが出ると、見えている範囲だけ下へずれる。そのずれ（--vv）だけ下げて、見えている上端に合わせる */
+  transform:translateY(var(--vv, 0px));
   height:46px;padding:0 12px;padding-top:env(safe-area-inset-top);
   background:var(--bg-elev);border-bottom:1px solid var(--border);box-shadow:var(--shadow-sm);
 }
@@ -234,7 +238,7 @@ body.readonly .panel .edit-only{display:none}
   .foot{padding:0 16px 40px}
   .toast{bottom:auto;top:54px;transform:translate(-50%,-10px)}
   /* 書式のバー（TopBar）は、上のバーのすぐ下に貼りつける */
-  .wrap .milkdown .milkdown-top-bar{position:sticky;top:44px;z-index:20;min-height:0}
+  .wrap .milkdown .milkdown-top-bar{position:sticky;top:44px;z-index:20;min-height:0;transform:translateY(var(--vv, 0px))}
   .wrap .milkdown .milkdown-top-bar{padding:1px 4px}
   .wrap .milkdown .milkdown-top-bar .top-bar-item{margin:1px;width:30px;height:30px;padding:3px}
   .wrap .milkdown .milkdown-top-bar .top-bar-item svg{width:22px;height:22px}
