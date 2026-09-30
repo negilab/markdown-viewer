@@ -123,6 +123,9 @@ a{color:var(--accent)}
 .wrap .milkdown .milkdown-list-item-block li{gap:3px}
 .wrap .milkdown .milkdown-list-item-block li .label-wrapper,
 .wrap .milkdown .milkdown-list-item-block li .label-wrapper .label{width:18px}
+/* 番号付きは「12.」のような2桁でも折り返さないよう、幅を固定せず右寄せにする（「.」の位置と本文の書き出しがそろう） */
+.wrap .milkdown .milkdown-list-item-block li .label-wrapper:has(.label.ordered),
+.wrap .milkdown .milkdown-list-item-block li .label-wrapper .label.ordered{width:auto;min-width:1.8em;white-space:nowrap;justify-content:flex-end;text-align:right}
 
 /* 表: 細かく折り返さず、表の中だけ左右にスクロールする */
 .wrap .milkdown .milkdown-table-block .table-wrapper{overflow-x:auto;-webkit-overflow-scrolling:touch}
