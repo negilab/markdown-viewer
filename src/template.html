@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <!-- maximum-scale=1: iPhone で入力欄に触れたときに勝手に拡大しないように（指での拡大はできる） -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>Markdown Editor β</title>
-<meta name="description" content="Notion のように、記号を見ずにMarkdownを書ける編集画面の試作です。">
+<title>Markdown Viewer</title>
+<meta name="description" content="Markdownを読みやすく表示し、記号を覚えずにそのまま書き直せます。PCでもiPhoneでも使えます。">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-/* ---------- 色（ビューアと同じ青を基調にする） ---------- */
+/* ---------- 色 ---------- */
 :root{
   color-scheme:light;
   --bg:#ffffff; --bg-sub:#f7f8fa; --bg-sunken:#eef0f4; --bg-elev:#ffffff;
@@ -53,10 +53,9 @@ a{color:var(--accent)}
   height:46px;padding:0 12px;padding-top:env(safe-area-inset-top);
   background:var(--bg-elev);border-bottom:1px solid var(--border);box-shadow:var(--shadow-sm);
 }
-.brand{display:flex;align-items:center;gap:8px;font-weight:700;white-space:nowrap;color:var(--fg);text-decoration:none}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;white-space:nowrap;color:var(--fg)}
 .brand{font-size:14px}
 .brand svg{width:20px;height:20px;color:var(--accent)}
-.brand small{font-weight:700;font-size:11px;color:var(--accent);background:var(--accent-soft);padding:2px 6px;border-radius:6px}
 .name{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:6px}
 .name .dot{color:var(--accent);font-size:10px}
 .btn{
@@ -80,7 +79,7 @@ a{color:var(--accent)}
 .menu button:hover{background:var(--bg-sub)}
 .menu small{display:block;font-size:11px;color:var(--fg-faint);margin-top:2px}
 
-/* ---------- 編集部品の色と文字をビューアに合わせる（部品のテーマより後に効くよう .wrap を付ける） ---------- */
+/* ---------- 編集部品の色と文字をこの画面に合わせる（部品のテーマより後に効くよう .wrap を付ける） ---------- */
 .wrap .milkdown{
   --crepe-color-background:var(--bg);
   --crepe-color-on-background:var(--fg);
@@ -133,6 +132,7 @@ a{color:var(--accent)}
 .seg2{display:flex;gap:2px;background:var(--bg-sunken);padding:2px;border-radius:8px}
 .menu .seg2 button{flex:1;text-align:center;padding:6px 0;border-radius:6px;font-size:12.5px;color:var(--fg-muted)}
 @media (max-width:820px){ .menu .pc-only{display:none} }
+.menu .ver{padding:6px 11px 4px;font-size:11px;color:var(--fg-faint);border-top:1px solid var(--border);margin-top:4px}
 .menu .seg2 button.on{background:var(--bg-elev);color:var(--fg);font-weight:600;box-shadow:var(--shadow-sm)}
 
 /* 段落をつかんだとき：標準の選択色（ずれた灰色）を消して、ブロック全体を淡く塗る */
@@ -145,11 +145,10 @@ a{color:var(--accent)}
 .wrap .milkdown .ProseMirror-hideselection *::selection{background:transparent}
 .wrap .milkdown .ProseMirror-hideselection *::-moz-selection{background:transparent}
 
-/* 表示のみ：書式のバーと ⋮⋮ を隠す */
+/* 閲覧中：書式のバーと ⋮⋮ を隠す */
 body.readonly .milkdown .milkdown-top-bar,
 body.readonly .milkdown .milkdown-block-handle{display:none !important}
 .foot{max-width:var(--cw, 860px);margin:0 auto;padding:0 80px 40px;font-size:12px;color:var(--fg-faint)}
-.foot a{color:var(--fg-muted)}
 
 /* ---------- PC の編集パネル ---------- */
 #btnPanel{display:none}
@@ -172,7 +171,7 @@ body.has-panel .wrap,body.has-panel .foot{
 .p-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
 .p-grid + .p-grid{margin-top:5px}
 .p-grid.g5{grid-template-columns:repeat(5,1fr);gap:4px}
-.p-grid.g5 .kb small{font-size:9px}
+.p-grid.g5 .kb small{font-size:8.5px;white-space:nowrap;letter-spacing:-.04em}
 .kb{
   height:40px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elev);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
@@ -184,7 +183,7 @@ body.has-panel .wrap,body.has-panel .foot{
 .kb.on small{color:var(--accent)}
 .kb.wide{flex-direction:row;gap:6px;height:32px;font-size:12.5px;color:var(--fg-muted)}
 .kb.wide svg{width:15px;height:15px}
-.seg{display:grid;grid-template-columns:1.1fr 1.3fr .8fr .8fr;gap:2px;background:var(--bg-sunken);padding:2px;border-radius:8px}
+.seg{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:2px;background:var(--bg-sunken);padding:2px;border-radius:8px}
 .seg button{padding:6px 0;border-radius:6px;font-size:12px;color:var(--fg-muted)}
 .seg button.on{background:var(--bg-elev);color:var(--fg);font-weight:600;box-shadow:var(--shadow-sm)}
 #toc a{display:block;padding:4px 8px;border-radius:6px;color:var(--fg-muted);text-decoration:none;line-height:1.45;cursor:pointer;
@@ -222,7 +221,6 @@ body.readonly .panel .edit-only{display:none}
 @media (max-width:820px){
   .top{gap:4px;padding:0 8px;height:44px}
   .brand .label,.btn .label,.sep{display:none}
-  .brand small{display:none}
   .btn{width:32px;height:30px;padding:0}
   .wrap{padding-top:4px}
   .wrap .milkdown .ProseMirror{padding:12px 16px 60px 46px;line-height:1.75}
@@ -249,43 +247,44 @@ body.readonly .panel .edit-only{display:none}
 </head>
 <body>
 <header class="top">
-  <button class="btn icon" id="btnPanel" title="編集パネル" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
-  <a class="brand" href="./" title="ビューアに戻る">
+  <button class="btn icon" id="btnPanel" title="編集パネルを開閉" aria-label="編集パネルを開閉" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+  <div class="brand">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M6 15V9l3 3 3-3v6"/><path d="M16 9v4m0 0 2-2m-2 2-2-2"/></svg>
-    <span class="label">Markdown Editor</span><small>β</small>
-  </a>
+    <span class="label">Markdown Viewer</span>
+  </div>
   <div class="name" id="docName"></div>
-  <button class="btn icon" id="btnUndo" title="戻る (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-  <button class="btn icon" id="btnRedo" title="やり直す (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+  <button class="btn icon" id="btnUndo" title="元に戻す (Ctrl+Z)" aria-label="元に戻す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+  <button class="btn icon" id="btnRedo" title="やり直す (Ctrl+Shift+Z)" aria-label="やり直す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
   <span class="sep"></span>
-  <button class="btn" id="btnView" title="表示のみ（編集しない）" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="label">表示のみ</span></button>
-  <button class="btn" id="btnSave" title="保存 (Ctrl+S)">
+  <button class="btn" id="btnView" title="閲覧に切り替え（書き換えを止める）" aria-label="閲覧に切り替え" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="label">閲覧に切り替え</span></button>
+  <button class="btn" id="btnSave" title="保存 (Ctrl+S)" aria-label="保存">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 3v5h7V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg>
     <span class="label">保存</span>
   </button>
   <span class="open-wrap">
-  <button class="btn" id="btnOpen" title="ファイルを開く (Ctrl+O)">
+  <button class="btn" id="btnOpen" title="ファイルを開く (Ctrl+O)" aria-label="開く">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
     <span class="label">開く</span>
   </button>
   <div class="menu" id="openMenu" hidden>
-    <button id="openLocal">この端末のファイル</button>
-    <button id="openDrive">Googleドライブ<small>原本をそのまま編集・上書き保存</small></button>
+    <button id="openLocal">この端末から開く</button>
+    <button id="openDrive">Googleドライブから開く<small>保存すると、ドライブのファイルに上書きします</small></button>
   </div>
   </span>
-  <button class="btn" id="btnNew" title="新しく書く">＋<span class="label">新規</span></button>
+  <button class="btn" id="btnNew" title="空のファイルを作る" aria-label="ファイルを作成">＋<span class="label">ファイルを作成</span></button>
   <span class="cfg-wrap">
-  <button class="btn icon" id="btnCfg" title="文字の大きさ・テーマ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h8M16 17h4"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="14" cy="17" r="2"/></svg></button>
+  <button class="btn icon" id="btnCfg" title="表示の設定" aria-label="表示の設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h8M16 17h4"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="14" cy="17" r="2"/></svg></button>
   <div class="menu" id="cfgMenu" hidden>
     <div class="row"><span>文字の大きさ</span>
       <div class="seg2" id="segFs"><button data-v="13.5">小</button><button data-v="15">標準</button><button data-v="17">大</button><button data-v="19">特大</button></div>
     </div>
     <div class="row pc-only"><span>本文の幅</span>
-      <div class="seg2" id="segCw"><button data-v="700">狭い</button><button data-v="860">標準</button><button data-v="1100">広い</button><button data-v="9999">全体</button></div>
+      <div class="seg2" id="segCw"><button data-v="700">狭い</button><button data-v="860">標準</button><button data-v="1100">広い</button><button data-v="9999">最大</button></div>
     </div>
     <div class="row"><span>テーマ</span>
       <div class="seg2" id="segTheme"><button data-v="auto">自動</button><button data-v="light">ライト</button><button data-v="dark">ダーク</button></div>
     </div>
+    <div class="ver">最終更新 <span class="app-ver"></span></div>
   </div>
   </span>
 </header>
@@ -294,27 +293,27 @@ body.readonly .panel .edit-only{display:none}
   <section class="p-sec edit-only">
     <div class="p-head">編集<span>文字を選んでから押す</span></div>
     <div class="p-row2">
-      <button class="kb wide" data-a="undo" title="戻る (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>戻る</button>
+      <button class="kb wide" data-a="undo" title="元に戻す (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>元に戻す</button>
       <button class="kb wide" data-a="redo" title="やり直す (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>やり直す</button>
     </div>
-    <div class="p-label">段落の種類</div>
+    <div class="p-label">見出し</div>
     <div class="seg" id="segHeading">
-      <button data-h="0">本文</button><button data-h="1">大見出し</button><button data-h="2">中</button><button data-h="3">小</button>
+      <button data-h="0">本文</button><button data-h="1">大</button><button data-h="2">中</button><button data-h="3">小</button>
     </div>
     <div class="p-label">文字</div>
     <div class="p-grid g5">
-      <button class="kb" data-a="bold" title="太字 (Ctrl+B)"><b>B</b><small>太字</small></button><button class="kb" data-a="italic" title="斜体 (Ctrl+I)"><i>I</i><small>斜体</small></button><button class="kb" data-a="strike" title="取り消し"><s>S</s><small>取り消し</small></button><button class="kb" data-a="code" title="コード">&lt;/&gt;<small>コード</small></button>
+      <button class="kb" data-a="bold" title="太字 (Ctrl+B)"><b>B</b><small>太字</small></button><button class="kb" data-a="italic" title="斜体 (Ctrl+I)"><i>I</i><small>斜体</small></button><button class="kb" data-a="strike" title="取り消し線"><s>S</s><small>取り消し線</small></button><button class="kb" data-a="code" title="コード">&lt;/&gt;<small>コード</small></button>
     <button class="kb" data-a="link" title="リンク">🔗<small>リンク</small></button>
     </div>
     <div class="p-label">段落</div>
     <div class="p-grid">
-      <button class="kb" data-a="ul" title="箇条書き">•<small>箇条書き</small></button><button class="kb" data-a="ol" title="番号">1.<small>番号</small></button><button class="kb" data-a="task" title="チェック">☐<small>チェック</small></button><button class="kb" data-a="quote" title="引用">❝<small>引用</small></button>
+      <button class="kb" data-a="ul" title="箇条書き">•<small>箇条書き</small></button><button class="kb" data-a="ol" title="番号付き">1.<small>番号付き</small></button><button class="kb" data-a="task" title="チェック">☐<small>チェック</small></button><button class="kb" data-a="quote" title="引用">❝<small>引用</small></button>
     </div>
     <div class="p-row2" style="margin-top:5px">
       <button class="kb wide" data-a="indent" title="字下げ (Tab)">⇥ 字下げ</button>
-      <button class="kb wide" data-a="outdent" title="字下げを戻す (Shift+Tab)">⇤ 戻す</button>
+      <button class="kb wide" data-a="outdent" title="字下げを解除 (Shift+Tab)">⇤ 字下げを解除</button>
     </div>
-    <div class="p-label">入れる</div>
+    <div class="p-label">挿入</div>
     <div class="p-grid">
       <button class="kb" data-a="table" title="表">▦<small>表</small></button><button class="kb" data-a="hr" title="区切り線">―<small>区切り線</small></button><button class="kb" data-a="codeblock" title="コード枠">{ }<small>コード枠</small></button><button class="kb" data-a="image" title="画像">🖼<small>画像</small></button>
     </div>
@@ -326,9 +325,9 @@ body.readonly .panel .edit-only{display:none}
   <section class="p-sec p-foot"><span id="stat"></span></section>
 </aside>
 <main class="wrap"><div id="editor"></div></main>
-<p class="foot">Markdown Editor <b class="app-ver"></b> ・ 試作です。ファイルのやりとりは、この端末と（ドライブから開いたときは）あなたのGoogleドライブの間だけです。 ・ <a href="./">いつものビューアに戻る</a></p>
+<p class="foot">ファイルは、この端末と、ドライブから開いたときのあなたのGoogleドライブとの間でだけやりとりします。</p>
 
-<div class="dropzone" id="dropzone"><p>ここにドロップ</p></div>
+<div class="dropzone" id="dropzone"><p>ここに置くと開きます</p></div>
 <div class="pathcard" id="pathCard" hidden><div class="pc-box"><div class="pc-body"></div><div class="pc-btns"></div></div></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="picker" accept=".md,.markdown,.mdx,.mkd,.txt,text/markdown,text/plain" hidden>
