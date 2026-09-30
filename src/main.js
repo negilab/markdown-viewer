@@ -19,6 +19,7 @@ import { blockServiceInstance } from "@milkdown/kit/plugin/block";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import * as drive from "./drive.js";
 import { ACTIONS, headingLevel, setHeading, indent, inCode } from "./panel.js";
+import { moveBlocks, multiRange, showRange, dragRange } from "./move.js";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
 import "@milkdown/crepe/theme/common/block-edit.css";
@@ -33,7 +34,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-09-30 16:00";
+const VERSION = "2026-09-30 18:00";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -153,6 +154,43 @@ els.root.addEventListener("beforeinput", e => {
   if (composing || e.isComposing || Date.now() - composeEnd < 500) { composeEnd = 0; e.preventDefault(); }
 }, true);
 
+/* ------------------------------------------------------------ 段落をまとめて動かす */
+/* 上へ / 下へ（キー・ボタン共通）。選んでいる範囲にかかる段落を1つずつ動かす */
+function move(dir) {
+  if (!crepe || readonly) return;
+  crepe.editor.action(ctx => {
+    const v = ctx.get(editorViewCtx);
+    const why = moveBlocks(v, dir);
+    if (why) toast(why);
+    if (!v.hasFocus()) v.focus();
+  });
+  schedulePanel();
+}
+/* Ctrl（Mac は ⌘）+ Shift + ↑ / ↓ */
+els.root.addEventListener("keydown", e => {
+  if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+  e.preventDefault(); e.stopPropagation();
+  move(e.key === "ArrowUp" ? -1 : 1);
+}, true);
+
+/* ⋮⋮ でつかんだとき: 直前の選択が複数の段落にかかっていて、つかんだ段落がその中なら、まとめて運ぶ。
+   部品は ⋮⋮ を押した瞬間に1段落だけを選び直すので、その前（capture）に選択を控えておく */
+let multi = null;
+document.addEventListener("mousedown", e => {
+  multi = null;
+  if (!crepe || readonly || !e.target.closest || !e.target.closest(".milkdown-block-handle")) return;
+  crepe.editor.action(ctx => { multi = multiRange(ctx.get(editorViewCtx).state); });
+}, true);
+document.addEventListener("mousedown", () => {
+  if (!multi) return;
+  crepe.editor.action(ctx => { if (!showRange(ctx.get(editorViewCtx), multi)) multi = null; });
+});
+document.addEventListener("dragstart", e => {
+  if (!multi || !crepe || !e.target.closest || !e.target.closest(".milkdown-block-handle")) return;
+  crepe.editor.action(ctx => dragRange(ctx.get(editorViewCtx), multi, e));
+});
+document.addEventListener("dragend", () => { multi = null; });
+
 /* ------------------------------------------------------------ PC の編集パネル */
 /* 幅の広い PC だけ。開け閉めは端末ごとに覚える */
 const wide = matchMedia("(min-width:900px)");
@@ -186,6 +224,7 @@ document.querySelectorAll("#panel [data-a]").forEach(b => {
     if (a === "undo") return run(undoCommand);
     if (a === "redo") return run(redoCommand);
     if (a === "indent" || a === "outdent") return panelAction(ctx => { const why = indent(ctx, a === "outdent"); if (why) toast(why); });
+    if (a === "up" || a === "down") return move(a === "up" ? -1 : 1);
     panelAction(ACTIONS[a].run);
   });
 });
@@ -245,9 +284,13 @@ const JA = {
   linkTooltip: { inputPlaceholder: "リンク先のURLを貼り付け" },
   topBar: {
     /* iPhone にはTabキーがないので、書式のバーに字下げ・字下げの解除を足す */
-    buildTopBar: builder => builder.addGroup("indent", "字下げ")
+    buildTopBar: builder => { builder.addGroup("indent", "字下げ")
       .addItem("sink", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M11 12h10M11 18h10"/><path d="m3 10 4 3-4 3"/></svg>', active: () => false, onRun: ctx => { const why = indent(ctx, false); if (why) toast(why); } })
-      .addItem("lift", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M11 12h10M11 18h10"/><path d="m7 10-4 3 4 3"/></svg>', active: () => false, onRun: ctx => { const why = indent(ctx, true); if (why) toast(why); } }),
+      .addItem("lift", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M11 12h10M11 18h10"/><path d="m7 10-4 3 4 3"/></svg>', active: () => false, onRun: ctx => { const why = indent(ctx, true); if (why) toast(why); } });
+      /* 選んでいる段落を上へ / 下へ（iPhone ではドラッグしにくいので、ボタンで動かす）。まとまりは builder から足す */
+      builder.addGroup("move", "移動")
+      .addItem("move-up", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>', active: () => false, onRun: ctx => { const why = moveBlocks(ctx.get(editorViewCtx), -1); if (why) toast(why); } })
+      .addItem("move-down", { icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m18 13-6 6-6-6"/></svg>', active: () => false, onRun: ctx => { const why = moveBlocks(ctx.get(editorViewCtx), 1); if (why) toast(why); } }); },
     headingOptions: [
       { label: "本文", level: null }, { label: "見出し 大", level: 1 },
       { label: "見出し 中", level: 2 }, { label: "見出し 小", level: 3 },
@@ -588,7 +631,8 @@ const WELCOME = [
   "",
   "- 行のはじめで「/」を押すと、見出しや表を挿入できます",
   "- 文字を選ぶと、太字やリンクのボタンが出ます",
-  "- 行の左の ⋮⋮ をつかむと、段落ごと並べ替えられます",
+  "- 行の左の ⋮⋮ をつかむと、段落ごと並べ替えられます。複数の段落にまたがって文字を選んでからつかむと、まとめて動かせます",
+  "- Ctrl（Mac は ⌘）+ Shift + ↑ / ↓ でも、選んだ段落を上下に動かせます",
   "- 行のはじめで `- ` `## ` `- [ ] ` と打つと、その場で箇条書き・見出し・チェックに変わります",
   "",
   "## ファイルを開く",
