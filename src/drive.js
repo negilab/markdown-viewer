@@ -1,24 +1,23 @@
 /* ============================================================================
  *  Google ドライブの原本を開いて、そのまま上書き保存する
  *  - ログイン: Google Identity Services（アクセストークン方式）
- *  - ファイル選び: Google Picker
+ *  - ファイル選び: Drive API v3 で一覧を取り、この画面の中に出す
+ *    （以前は Google Picker を使っていたが、API キーの確かめ方がブラウザによってずれて
+ *      「API デベロッパー キーが無効です」と出ることがあり、画面の大きさも合わせられないのでやめた）
  *  - 読み書き: Drive API v3
  *  権限はドライブ全体（drive）。PC のパスからファイルを探して上書きするため。
  *  （Google ドライブのパソコン用アプリで同期した C ドライブのフォルダは、ドライブの「パソコン」に入る）
  * ==========================================================================*/
 
-/* Google Cloud Console で作った値。どれもページの中で使う公開用の値で、秘密ではない
-   （APIキーは negilab.github.io からしか使えないよう、Console 側で制限しておく） */
+/* Google Cloud Console で作った値。ページの中で使う公開用の値で、秘密ではない */
 export const GOOGLE = {
   clientId: "735606358037-k1u1cesfr0u1hmummenlj1tbr35it7tr.apps.googleusercontent.com",   /* OAuth クライアント ID（…apps.googleusercontent.com） */
-  apiKey: "AIzaSyAUdDVF1N04ESyrJH7IlWm5oYR51JD7kN8",     /* API キー（Picker 用） */
-  appId: "735606358037",      /* プロジェクト番号（数字だけ） */
 };
 
 const SCOPE = "https://www.googleapis.com/auth/drive";
-export const configured = () => !!(GOOGLE.clientId && GOOGLE.apiKey && GOOGLE.appId);
+export const configured = () => !!GOOGLE.clientId;
 
-let tokenClient = null, token = null, tokenExp = 0, pending = null, pickerReady = false;
+let tokenClient = null, token = null, tokenExp = 0, pending = null;
 
 /* リンクから開くたびにログインを押さなくて済むよう、有効期限（約1時間）までこの端末に覚えておく */
 const TOKEN_KEY = "mdb.gtoken";
@@ -55,9 +54,7 @@ export function preload() {
   return preloading || (preloading = load());
 }
 async function load() {
-  await Promise.all([loadScript("https://accounts.google.com/gsi/client"), loadScript("https://apis.google.com/js/api.js")]);
-  await new Promise(res => window.gapi.load("picker", { callback: res }));
-  pickerReady = true;
+  await loadScript("https://accounts.google.com/gsi/client");
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE.clientId,
     scope: SCOPE,
@@ -78,7 +75,7 @@ async function load() {
     error_callback: e => { const p = pending; pending = null; if (p) p.rej(Object.assign(new Error(e.type || "popup"), { name: "AbortError" })); },
   });
 }
-export const ready = () => !!tokenClient && pickerReady;
+export const ready = () => !!tokenClient;
 
 /* 押した処理の中で、await より前に呼ぶこと（ポップアップのため） */
 export function getToken() {
@@ -103,29 +100,29 @@ async function api(url, opts = {}) {
 
 const FIELDS = "id,name,mimeType,modifiedTime";
 
-/* ドライブからファイルを選んで、中身と情報を返す。取り消したら null */
-export async function open(tokenPromise) {
-  const t = await tokenPromise;
-  const picked = await new Promise(res => {
-    const G = window.google.picker;
-    const view = new G.DocsView(G.ViewId.DOCS).setIncludeFolders(true).setSelectFolderEnabled(false).setMode(G.DocsViewMode.LIST);
-    new G.PickerBuilder()
-      .addView(view)
-      .setOAuthToken(t)
-      .setDeveloperKey(GOOGLE.apiKey)
-      .setAppId(GOOGLE.appId)
-      .setLocale("ja")
-      .setTitle("開く Markdown ファイルを選んでください")
-      .setCallback(d => {
-        if (d.action === G.Action.PICKED) res(d.docs[0]);
-        else if (d.action === G.Action.CANCEL) res(null);
-      })
-      .build().setVisible(true);
-  });
-  if (!picked) return null;
-  const meta = await (await api("https://www.googleapis.com/drive/v3/files/" + picked.id + "?fields=" + FIELDS)).json();
-  const text = await (await api("https://www.googleapis.com/drive/v3/files/" + picked.id + "?alt=media")).text();
-  return { meta, text };
+/* 開けるファイルの一覧（新しく更新した順）。q があればファイル名・本文から探す。
+   Drive は .md の種類（mimeType）がまちまちなので、文字のファイルを広めに取ってから拡張子で絞る */
+const MD = /\.(md|markdown|mkd|mdown|mdx|txt)$/i;
+export async function list(tokenPromise, q) {
+  await tokenPromise;
+  let cond = "trashed = false and mimeType != 'application/vnd.google-apps.folder'" +
+    " and (mimeType contains 'text/' or mimeType = 'application/octet-stream' or mimeType = 'application/x-markdown')";
+  if (q) cond += " and (name contains " + qstr(q) + " or fullText contains " + qstr(q) + ")";
+  const r = await (await api("https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent(cond) +
+    "&orderBy=modifiedTime desc&pageSize=200&fields=files(" + FIELDS + ",parents)" + DRIVE_Q)).json();
+  const files = (r.files || []).filter(f => MD.test(f.name)).slice(0, 60);
+  /* どのフォルダにあるかを添える（同じ名前のファイルを見分けるため） */
+  await Promise.all(files.map(async f => {
+    const fo = f.parents && f.parents[0] ? await folder(f.parents[0]) : null;
+    f.folder = fo ? fo.name : "";
+  }));
+  return files.map(f => ({ meta: { id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime }, folder: f.folder }));
+}
+const folderCache = new Map();
+function folder(id) {
+  if (!folderCache.has(id)) folderCache.set(id, api("https://www.googleapis.com/drive/v3/files/" + id +
+    "?fields=id,name,parents&supportsAllDrives=true").then(r => r.json()).catch(() => null));
+  return folderCache.get(id);
 }
 
 /* 原本に上書きする。開いたあとにドライブ側で変わっていたら、confirmChanged() で確かめる */
