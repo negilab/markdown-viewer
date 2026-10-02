@@ -69,25 +69,17 @@ function saveCache() {
 }
 export const cached = html => loadCache().get(html);
 
-/* まだ訳していない文を、まとめて訳す（1回に100件・2万5千文字まで） */
-export async function translateMissing(htmls, apiKey) {
+/* まだ訳していない文を、まとめて訳す（1回に100件・2万5千文字まで）。send(body) が翻訳サービスに頼む */
+export const missing = htmls => { const c = loadCache(); return [...new Set(htmls.filter(h => !c.has(h)))]; };
+export async function translateMissing(htmls, send) {
   const c = loadCache();
   const todo = [...new Set(htmls.filter(h => !c.has(h)))];
   for (let i = 0; i < todo.length;) {
     const batch = [];
     let size = 0;
     while (i < todo.length && batch.length < 100 && (size + todo[i].length <= 25000 || !batch.length)) { size += todo[i].length; batch.push(todo[i++]); }
-    const r = await fetch("https://translation.googleapis.com/language/translate/v2?key=" + encodeURIComponent(apiKey), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ q: batch, source: "en", target: "ja", format: "html" }),
-    });
-    if (!r.ok) {
-      let reason = "";
-      try { reason = ((await r.json()).error || {}).message || ""; } catch (e) {}
-      throw Object.assign(new Error("translate " + r.status), { status: r.status, reason });
-    }
-    const out = ((await r.json()).data || {}).translations || [];
+    const res = await send({ q: batch, source: "en", target: "ja", format: "html" });
+    const out = (res.data || {}).translations || [];
     batch.forEach((h, k) => { if (out[k]) c.set(h, out[k].translatedText); });
   }
   if (todo.length) saveCache();

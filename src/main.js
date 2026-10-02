@@ -21,7 +21,7 @@ import * as drive from "./drive.js";
 import { ACTIONS, headingLevel, setHeading, indent, inCode } from "./panel.js";
 import { moveBlocks, multiRange, showRange, dragRange } from "./move.js";
 import { changesPlugin, diffDecorations, setDecorations, spotPositions } from "./changes.js";
-import { trPlugin, trBlocks, trDecorations, translateMissing, setTr } from "./translate.js";
+import { trPlugin, trBlocks, trDecorations, translateMissing, missing, setTr } from "./translate.js";
 import { DecorationSet } from "@milkdown/kit/prose/view";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
@@ -37,7 +37,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-10-03 13:00";
+const VERSION = "2026-10-03 23:00";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -935,7 +935,7 @@ $("#chgClear").addEventListener("click", () => {
    書き換えたら少し待って、変わった段落だけ訳し直す */
 const btnTr = $("#btnTr");
 let trOn = store.get("tr", false), trSeq = 0;
-btnTr.hidden = !drive.GOOGLE.translateKey;
+btnTr.hidden = !(drive.configured() && drive.GOOGLE.translateProject);
 function renderTrBtn(busy) {
   const text = busy ? "訳しています…" : trOn ? "和訳を隠す" : "和訳を表示";
   btnTr.setAttribute("aria-pressed", String(trOn));
@@ -943,30 +943,44 @@ function renderTrBtn(busy) {
   btnTr.title = trOn ? "和訳を隠す" : "英語の段落の下に和訳を表示";
   const l = btnTr.querySelector(".label"); if (l) l.textContent = text;
 }
+/* manual: ボタンを押したとき。ログインの窓は押した瞬間にしか開けないので、そのときだけログインを頼む。
+   書き換えたあとなどは、ログイン済みのときだけ訳し直す（覚えている訳はいつでも出す） */
 async function applyTr(manual) {
-  if (!crepe || !drive.GOOGLE.translateKey) return;
+  if (!crepe || btnTr.hidden) return;
   const seq = ++trSeq, f = doc;
   const view = () => { let v; crepe.editor.action(ctx => { v = ctx.get(editorViewCtx); }); return v; };
   if (!trOn) { setTr(view(), DecorationSet.empty); return; }
   const htmls = trBlocks(view().state.doc).map(b => b.html);
   if (manual && !htmls.length) toast("訳す英語の段落が見つかりません。コード枠の中は訳しません");
-  renderTrBtn(true);
-  try {
-    await translateMissing(htmls, drive.GOOGLE.translateKey);
-  } catch (e) {
-    if (seq !== trSeq) return;
-    trOn = false; store.set("tr", false); renderTrBtn();
-    const why = String(e.reason || "");
-    toast(e.status === 403 || e.status === 400
-      ? (/billing/i.test(why) ? "Google Cloud で支払い方法が登録されていないため、訳せません。登録してから、もう一度押してください"
-        : /not been used|SERVICE_DISABLED|is disabled/i.test(why) ? "Google Cloud で Cloud Translation API が有効になっていないため、訳せません。有効にして数分待ってから、もう一度押してください"
-        : /referer|referrer/i.test(why) ? "このサイトから API キーを使う許可がないため、訳せません。Google Cloud で API キーの「ウェブサイトの制限」を確かめてください"
-        : /blocked/i.test(why) ? "API キーで翻訳が許可されていないため、訳せません。Google Cloud で API キーの「APIの制限」に Cloud Translation API を足してください"
-        : /not valid|invalid/i.test(why) ? "API キーが見つからないため、訳せません。Google Cloud で API キーを作り直してください"
-        : "翻訳サービスに断られたため、訳せません。Google Cloud で Cloud Translation API と API キーの設定を確かめてください")
-      : e.status === 429 ? "翻訳サービスの上限に達したため、訳せません。少し待ってから、もう一度押してください"
-      : "通信がうまくいかず、訳せません。通信を確かめて、もう一度押してください");
-    return;
+  let tp = null;
+  if (missing(htmls).length) {
+    if (drive.hasToken()) tp = drive.getToken();
+    else if (manual) {
+      if (!drive.ready()) { trOn = false; renderTrBtn(); toast("Googleに接続中です。数秒待ってから、もう一度押してください"); return; }
+      tp = drive.getToken();
+    }
+  }
+  if (tp) {
+    renderTrBtn(true);
+    try {
+      await translateMissing(htmls, body => drive.translate(tp, body));
+    } catch (e) {
+      if (seq !== trSeq) return;
+      trOn = false; store.set("tr", false); renderTrBtn();
+      const why = String(e.reason || "");
+      if (/insufficient|SCOPE/i.test(why) || (e.status === 403 && !drive.translateGranted())) drive.dropToken();
+      toast(e.name === "AbortError" || /access_denied/.test(e.message) ? "Google で翻訳の利用が許可されなかったため、訳せません。もう一度押して、許可の画面で「許可」を押してください"
+        : e.status === 401 ? "ログインの期限が切れたため、訳せません。もう一度押してください"
+        : e.status === 403 || e.status === 400
+        ? (/insufficient|SCOPE/i.test(why) ? "Google で翻訳の利用が許可されていないため、訳せません。もう一度押して、許可の画面で翻訳にもチェックを入れてください"
+          : /billing/i.test(why) ? "Google Cloud で支払い方法が登録されていないため、訳せません。登録してから、もう一度押してください"
+          : /not been used|SERVICE_DISABLED|is disabled/i.test(why) ? "Google Cloud で Cloud Translation API が有効になっていないため、訳せません。有効にして数分待ってから、もう一度押してください"
+          : /permission|denied|IAM|serviceusage/i.test(why) ? "このGoogleアカウントには、翻訳を使うプロジェクトの権限がないため、訳せません。プロジェクトの持ち主のアカウントでログインしてください"
+          : "翻訳サービスに断られたため、訳せません。Google Cloud で Cloud Translation API の設定を確かめてください")
+        : e.status === 429 ? "翻訳サービスの上限に達したため、訳せません。少し待ってから、もう一度押してください"
+        : "通信がうまくいかず、訳せません。通信を確かめて、もう一度押してください");
+      return;
+    }
   }
   if (seq !== trSeq || f !== doc || !crepe) return;
   renderTrBtn();
