@@ -270,6 +270,20 @@ body.readonly .panel .edit-only{display:none}
 .ds-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px 10px}
 .ds-head b{font-size:16px}
 .ds-head .btn{width:auto;height:32px;padding:0 12px;font-size:13px}
+.ds-tabs{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin:0 16px 10px;padding:2px;background:var(--bg-sunken);border-radius:9px}
+.ds-tabs button{height:32px;border-radius:7px;font-size:13px;color:var(--fg-muted)}
+.ds-tabs button.on{background:var(--bg-elev);color:var(--fg);font-weight:600;box-shadow:var(--shadow-sm)}
+.ds-path{display:flex;align-items:center;flex-wrap:wrap;gap:2px;padding:0 12px 10px;border-bottom:1px solid var(--border);font-size:13px}
+.ds-path[hidden]{display:none}
+.ds-path button{padding:4px 6px;border-radius:6px;color:var(--fg-muted);max-width:14em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds-path button:hover{background:var(--bg-sub);color:var(--fg)}
+.ds-path button:last-child{color:var(--fg);font-weight:600}
+.ds-path .sl{color:var(--fg-faint)}
+.ds-item.fo{display:flex;align-items:center;gap:10px}
+.ds-item.fo .ic{width:18px;height:18px;color:var(--fg-muted)}
+.ds-item.fo b{flex:1;min-width:0}
+.ds-item .fi{display:flex;align-items:center;gap:10px}
+.ds-item .fi .ic{width:18px;height:18px;color:var(--fg-faint);flex:none}
 .ds-search{padding:0 16px 10px;border-bottom:1px solid var(--border)}
 .ds-search label{display:block;font-size:12px;color:var(--fg-muted);margin-bottom:5px}
 .ds-search input{width:100%;height:38px;padding:0 12px;border:1px solid var(--border-strong);border-radius:9px;background:var(--bg);color:var(--fg);font:inherit;font-size:16px}
@@ -352,6 +366,10 @@ body.readonly .panel .edit-only{display:none}
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-pc" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-drive" viewBox="0 0 24 24"><path d="M8 4h8l5 9-3 6H6l-3-6z"/><path d="M3 13h18"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-car" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
@@ -468,11 +486,13 @@ body.readonly .panel .edit-only{display:none}
 <div class="pathcard" id="pathCard" hidden><div class="pc-box"><div class="pc-body"></div><div class="pc-btns"></div></div></div>
 <div class="pathcard" id="driveSheet" hidden><div class="pc-box sheet" role="dialog" aria-modal="true" aria-labelledby="dsTitle">
   <div class="ds-head"><b id="dsTitle">Googleドライブから開く</b><button class="btn" id="dsClose">閉じる</button></div>
-  <div class="ds-search">
+  <div class="ds-tabs" role="tablist"><button role="tab" data-m="recent">最近のファイル</button><button role="tab" data-m="folder">フォルダから選ぶ</button></div>
+  <div class="ds-search" id="dsSearch">
     <label for="dsQuery">ファイル名・本文で探す</label>
     <input id="dsQuery" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="off">
     <small>最近更新したものから順に並びます</small>
   </div>
+  <nav class="ds-path" id="dsPath" aria-label="今いるフォルダ" hidden></nav>
   <div class="ds-list" id="dsList"></div>
 </div></div>
 <div class="chgbar" id="chgBar" role="status" hidden><span id="chgText"></span><button class="btn" id="chgNext">次の変更へ</button><button class="btn" id="chgClear">色を消す</button></div>

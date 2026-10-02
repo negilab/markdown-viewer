@@ -125,6 +125,51 @@ function folder(id) {
   return folderCache.get(id);
 }
 
+/* ---- フォルダからたどって選ぶ */
+const FOLDER = "application/vnd.google-apps.folder";
+/* いちばん上に並べる場所: マイドライブと、PC から同期しているフォルダ（ドライブの「パソコン」）。
+   「パソコン」の入口（PC そのもの）は一覧に出てこないので、自分のフォルダの親をたどって見つける */
+let rootsCache = null;
+export function roots(tokenPromise) {
+  return rootsCache || (rootsCache = (async () => {
+    await tokenPromise;
+    const my = await (await api("https://www.googleapis.com/drive/v3/files/root?fields=id,name")).json();
+    const out = [{ id: my.id, name: "マイドライブ", kind: "root" }];
+    const ids = new Set(), parents = new Set();
+    let page = "";
+    for (let n = 0; n < 5; n++) {
+      const r = await (await api("https://www.googleapis.com/drive/v3/files?q=" +
+        encodeURIComponent("mimeType = '" + FOLDER + "' and trashed = false and 'me' in owners") +
+        "&pageSize=1000&fields=nextPageToken,files(id,parents)" + (page ? "&pageToken=" + page : ""))).json();
+      for (const f of r.files || []) { ids.add(f.id); (f.parents || []).forEach(x => parents.add(x)); }
+      page = r.nextPageToken;
+      if (!page) break;
+    }
+    const tops = [...parents].filter(x => x !== my.id && !ids.has(x)).slice(0, 10);
+    const found = await Promise.all(tops.map(folder));
+    for (const fo of found) if (fo && fo.id && !(fo.parents && fo.parents.length)) out.push({ id: fo.id, name: fo.name, kind: "pc" });
+    return out;
+  })().catch(e => { rootsCache = null; throw e; }));
+}
+/* フォルダの中身: フォルダと md / txt ファイル（フォルダが先、名前順） */
+export async function children(tokenPromise, folderId) {
+  await tokenPromise;
+  const cond = "'" + folderId + "' in parents and trashed = false and (mimeType = '" + FOLDER + "'" +
+    " or mimeType contains 'text/' or mimeType = 'application/octet-stream' or mimeType = 'application/x-markdown')";
+  let items = [], page = "";
+  for (let n = 0; n < 5; n++) {
+    const r = await (await api("https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent(cond) +
+      "&orderBy=folder,name&pageSize=1000&fields=nextPageToken,files(" + FIELDS + ")" + DRIVE_Q + (page ? "&pageToken=" + page : ""))).json();
+    items = items.concat(r.files || []);
+    page = r.nextPageToken;
+    if (!page) break;
+  }
+  return {
+    folders: items.filter(f => f.mimeType === FOLDER).map(f => ({ id: f.id, name: f.name })),
+    files: items.filter(f => f.mimeType !== FOLDER && MD.test(f.name)).map(f => ({ meta: { id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime } })),
+  };
+}
+
 /* 原本に上書きする。開いたあとにドライブ側で変わっていたら、confirmChanged() で確かめる */
 export async function save(tokenPromise, meta, text, confirmChanged) {
   await tokenPromise;

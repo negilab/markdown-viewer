@@ -36,7 +36,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-10-02 18:00";
+const VERSION = "2026-10-02 20:00";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -586,12 +586,87 @@ $("#openDrive").addEventListener("click", () => { menu.hidden = true; openDrive(
 const sheet = $("#driveSheet"), dsList = $("#dsList"), dsQuery = $("#dsQuery");
 const fmtTime = t => { try { return new Date(t).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } };
 const note = html => { dsList.innerHTML = '<p class="ds-note">' + html + "</p>"; };
+/* 「最近のファイル」と「フォルダから選ぶ」。どちらで開いたか・最後にいたフォルダは端末ごとに覚える */
+let dsMode = store.get("dsMode", "recent");
+let dsStack = store.get("dsPath", []);
+function setMode(m) {
+  dsMode = m; store.set("dsMode", m);
+  document.querySelectorAll(".ds-tabs button").forEach(b => { b.classList.toggle("on", b.dataset.m === m); b.setAttribute("aria-selected", String(b.dataset.m === m)); });
+  $("#dsSearch").hidden = m !== "recent";
+  $("#dsPath").hidden = m !== "folder";
+}
+document.querySelectorAll(".ds-tabs button").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.m === dsMode) return;
+  setMode(b.dataset.m);
+  if (dsMode === "recent") showList(drive.getToken(), dsQuery.value.trim()); else showFolder(drive.getToken());
+}));
 async function openDrive() {
   if (!drive.ready()) { toast("Googleドライブに接続中です。数秒待ってから、もう一度押してください"); return; }
   const tp = drive.getToken();
   dsQuery.value = "";
   sheet.hidden = false;
-  showList(tp, "");
+  setMode(dsMode);
+  if (dsMode === "recent") showList(tp, ""); else showFolder(tp);
+}
+/* フォルダの中を並べる。dsStack が空なら、いちばん上（マイドライブ・パソコン） */
+function renderPath() {
+  const nav = $("#dsPath");
+  nav.innerHTML = "";
+  const crumbs = [{ name: "ドライブ" }].concat(dsStack);
+  crumbs.forEach((c, i) => {
+    if (i) { const sl = document.createElement("span"); sl.className = "sl"; sl.textContent = "/"; nav.append(sl); }
+    const b = document.createElement("button");
+    b.textContent = c.name; b.title = c.name;
+    b.addEventListener("click", () => { dsStack = dsStack.slice(0, i); showFolder(drive.getToken()); });
+    nav.append(b);
+  });
+}
+function folderButton(icon, name, sub, onClick) {
+  const b = document.createElement("button");
+  b.className = "ds-item fo";
+  b.innerHTML = IC(icon) + "<b>" + esc(name) + (sub ? "<small>" + esc(sub) + "</small>" : "") + "</b>" + IC("chev");
+  b.addEventListener("click", onClick);
+  return b;
+}
+async function showFolder(tp) {
+  const seq = ++listSeq;
+  store.set("dsPath", dsStack);
+  renderPath();
+  note("読み込んでいます…");
+  try {
+    if (!dsStack.length) {
+      const rs = await drive.roots(tp);
+      if (seq !== listSeq || sheet.hidden) return;
+      dsList.innerHTML = "";
+      for (const r of rs) {
+        dsList.append(folderButton(r.kind === "pc" ? "pc" : "drive", r.name, r.kind === "pc" ? "パソコンから同期しているフォルダ" : "",
+          () => { dsStack = [{ id: r.id, name: r.name }]; showFolder(drive.getToken()); }));
+      }
+      return;
+    }
+    const here = dsStack[dsStack.length - 1];
+    const c = await drive.children(tp, here.id);
+    if (seq !== listSeq || sheet.hidden) return;
+    dsList.innerHTML = "";
+    for (const fo of c.folders) {
+      dsList.append(folderButton("folder", fo.name, "", () => { dsStack = dsStack.concat([{ id: fo.id, name: fo.name }]); showFolder(drive.getToken()); }));
+    }
+    for (const f of c.files) {
+      const b = document.createElement("button");
+      b.className = "ds-item";
+      b.innerHTML = '<span class="fi">' + IC("doc") + "<b>" + esc(f.meta.name) + "<small>" + esc(fmtTime(f.meta.modifiedTime)) + "</small></b></span>";
+      b.addEventListener("click", () => pickDrive(f.meta, here.name));
+      dsList.append(b);
+    }
+    if (!c.folders.length && !c.files.length) note("このフォルダには、フォルダも md ファイルもありません。上の「/」の左の名前を押すと、前のフォルダに戻れます。");
+  } catch (e) {
+    if (seq !== listSeq) return;
+    if (e && e.name === "AbortError") { sheet.hidden = true; return; }
+    /* 覚えていたフォルダが消えていたときなどは、いちばん上に戻す */
+    if (dsStack.length && !(e && e.message === "expired")) { dsStack = []; store.set("dsPath", dsStack); }
+    note(e && e.message === "expired" ? "ログインの期限が切れたため、フォルダを出せません。閉じてから、もう一度「開く」を押してください。"
+                                      : "通信がうまくいかず、フォルダを出せません。通信を確かめて、閉じてからもう一度「開く」を押してください。");
+  }
 }
 let listSeq = 0;
 async function showList(tp, q) {
