@@ -21,6 +21,7 @@ import * as drive from "./drive.js";
 import { ACTIONS, headingLevel, setHeading, indent, inCode } from "./panel.js";
 import { moveBlocks, multiRange, showRange, dragRange } from "./move.js";
 import { changesPlugin, diffDecorations, setDecorations, spotPositions } from "./changes.js";
+import { trPlugin, trBlocks, trDecorations, translateMissing, setTr } from "./translate.js";
 import { DecorationSet } from "@milkdown/kit/prose/view";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
@@ -36,7 +37,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-10-02 20:00";
+const VERSION = "2026-10-03 12:00";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -182,7 +183,7 @@ async function show(f, o = {}) {
   /* 部品が書き直した形を「保存済み」の基準にする（開いただけで ● が付かないように） */
   if (o.fresh || f.saved == null || wasClean) f.saved = f.md;
   renderTitle(); updateUndo();
-  applyChanges();
+  applyChanges(); applyTr();
   window.scrollTo(0, f.scroll || 0);
   if (!touch && o.fresh) els.root.querySelector(".ProseMirror")?.focus();
   persist();
@@ -216,10 +217,12 @@ async function makeEditor(md) {
   crepe.editor.config(ctx => ctx.update(remarkStringifyOptionsCtx, o => ({ ...o, bullet: "-", rule: "-" })));
   /* 前に見た中身から変わった所に色を付ける部品 */
   crepe.editor.use(changesPlugin);
+  /* 英語の段落の下に和訳を出す部品 */
+  crepe.editor.use(trPlugin);
   crepe.on(api => {
     api.markdownUpdated((ctx, md) => {
       doc.md = md;
-      renderTitle(); updateUndo(); schedulePanel(); showChgBar();
+      renderTitle(); updateUndo(); schedulePanel(); showChgBar(); trSoon();
       persist();
     });
     api.selectionUpdated(() => { followCaret(); schedulePanel(); });
@@ -463,7 +466,7 @@ async function setReadonly(on) {
   const y = window.scrollY;
   await makeEditor(doc.md);
   renderTitle();
-  applyChanges();
+  applyChanges(); applyTr();
   window.scrollTo(0, y);
 }
 els.view.addEventListener("click", () => { setReadonly(!readonly); toast(readonly ? "閲覧に切り替えました" : "編集に切り替えました"); });
@@ -925,6 +928,53 @@ $("#chgClear").addEventListener("click", () => {
   if (crepe) crepe.editor.action(ctx => setDecorations(ctx.get(editorViewCtx), DecorationSet.empty));
   showChgBar();
 });
+
+/* ------------------------------------------------------------ 和訳 */
+/* 「和訳を表示」を押すと、英語の段落の下に和訳を出す。表示するかどうかは端末ごとに覚える。
+   書き換えたら少し待って、変わった段落だけ訳し直す */
+const btnTr = $("#btnTr");
+let trOn = store.get("tr", false), trSeq = 0;
+btnTr.hidden = !drive.GOOGLE.translateKey;
+function renderTrBtn(busy) {
+  const text = busy ? "訳しています…" : trOn ? "和訳を隠す" : "和訳を表示";
+  btnTr.setAttribute("aria-pressed", String(trOn));
+  btnTr.setAttribute("aria-label", text);
+  btnTr.title = trOn ? "和訳を隠す" : "英語の段落の下に和訳を表示";
+  const l = btnTr.querySelector(".label"); if (l) l.textContent = text;
+}
+async function applyTr(manual) {
+  if (!crepe || !drive.GOOGLE.translateKey) return;
+  const seq = ++trSeq, f = doc;
+  const view = () => { let v; crepe.editor.action(ctx => { v = ctx.get(editorViewCtx); }); return v; };
+  if (!trOn) { setTr(view(), DecorationSet.empty); return; }
+  const htmls = trBlocks(view().state.doc).map(b => b.html);
+  if (manual && !htmls.length) toast("訳す英語の段落が見つかりません。コード枠の中は訳しません");
+  renderTrBtn(true);
+  try {
+    await translateMissing(htmls, drive.GOOGLE.translateKey);
+  } catch (e) {
+    if (seq !== trSeq) return;
+    trOn = false; store.set("tr", false); renderTrBtn();
+    const why = String(e.reason || "");
+    toast(e.status === 403 || e.status === 400
+      ? (/billing/i.test(why) ? "Google Cloud で支払い方法が登録されていないため、訳せません。登録してから、もう一度押してください"
+        : /not been used|disabled/i.test(why) ? "Google Cloud で翻訳サービスが有効になっていないため、訳せません。有効にしてから、もう一度押してください"
+        : "翻訳サービスの API キーが使えないため、訳せません。Google Cloud で API キーの設定を確かめてください")
+      : e.status === 429 ? "翻訳サービスの上限に達したため、訳せません。少し待ってから、もう一度押してください"
+      : "通信がうまくいかず、訳せません。通信を確かめて、もう一度押してください");
+    return;
+  }
+  if (seq !== trSeq || f !== doc || !crepe) return;
+  renderTrBtn();
+  const v = view();
+  setTr(v, trDecorations(v.state.doc));
+}
+function trSoon() { if (!trOn) return; clearTimeout(trSoon.t); trSoon.t = setTimeout(applyTr, 1500); }
+btnTr.addEventListener("click", () => {
+  trOn = !trOn; store.set("tr", trOn); renderTrBtn();
+  applyTr(true);
+});
+renderTrBtn();
 
 /* ------------------------------------------------------------ 保存 */
 async function writeTo(handle, text) {

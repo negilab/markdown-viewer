@@ -301,6 +301,15 @@ body.readonly .panel .edit-only{display:none}
   .pc-box.sheet{max-height:calc(100dvh - 24px)}
 }
 
+/* ---------- 和訳（英語の段落の下に出す） ---------- */
+#btnTr[hidden]{display:none}
+.wrap .milkdown .ProseMirror .tr-ja{margin:.15em 0 .7em;padding:.1em 0 .1em .8em;border-left:2px solid var(--border-strong);
+  color:var(--fg-muted);font-size:.93em;font-weight:400;line-height:1.75;letter-spacing:0;text-transform:none;user-select:text;-webkit-user-select:text;cursor:default}
+.wrap .milkdown .ProseMirror .tr-ja code{font-family:var(--mono);font-size:.9em;background:var(--bg-sunken);padding:.1em .35em;border-radius:4px}
+.wrap .milkdown .ProseMirror .tr-ja.in-cell{margin:.2em 0 0;font-size:.88em}
+.wrap .milkdown .ProseMirror h1 + .tr-ja,.wrap .milkdown .ProseMirror h2 + .tr-ja,.wrap .milkdown .ProseMirror h3 + .tr-ja{margin-top:-.2em}
+@media print{ .tr-ja{display:none} }
+
 /* ---------- 前に見たときから変わった所 ---------- */
 :root{--chg:#c2410c}
 :root[data-theme="dark"]{--chg:#fb923c}
@@ -400,6 +409,7 @@ body.readonly .panel .edit-only{display:none}
   <button class="btn icon" id="btnUndo" title="元に戻す (Ctrl+Z)" aria-label="元に戻す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
   <button class="btn icon" id="btnRedo" title="やり直す (Ctrl+Shift+Z)" aria-label="やり直す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
   <span class="sep"></span>
+  <button class="btn" id="btnTr" title="英語の段落の下に和訳を表示" aria-label="和訳を表示" aria-pressed="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg><span class="label">和訳を表示</span></button>
   <button class="btn" id="btnView" title="閲覧に切り替え（書き換えを止める）" aria-label="閲覧に切り替え" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="label">閲覧に切り替え</span></button>
   <button class="btn" id="btnSave" title="保存 (Ctrl+S)" aria-label="保存">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 3v5h7V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg>
@@ -480,7 +490,7 @@ body.readonly .panel .edit-only{display:none}
   <div class="p-foot"><span id="stat"></span><span>Ctrl+Shift+↑↓ で移動</span></div>
 </aside>
 <main class="wrap"><div id="editor"></div></main>
-<p class="foot">ファイルは、この端末と、ドライブから開いたときのあなたのGoogleドライブとの間でだけやりとりします。</p>
+<p class="foot">ファイルは、この端末と、ドライブから開いたときのあなたのGoogleドライブとの間でだけやりとりします。「和訳を表示」を押したときだけ、英語の段落をGoogleの翻訳サービスに送ります。</p>
 
 <div class="dropzone" id="dropzone"><p>ここに置くと開きます</p></div>
 <div class="pathcard" id="pathCard" hidden><div class="pc-box"><div class="pc-body"></div><div class="pc-btns"></div></div></div>
