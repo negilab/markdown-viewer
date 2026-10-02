@@ -194,3 +194,19 @@ export async function read(tokenPromise, meta) {
   await tokenPromise;
   return (await api("https://www.googleapis.com/drive/v3/files/" + meta.id + "?alt=media&supportsAllDrives=true")).text();
 }
+
+/* 1つ前の版の中身（変わった所に色を付けるため）。前の版がなければ null。
+   PC の Googleドライブ用アプリで同期したファイルは、PC で保存するたびに版が増える */
+export async function previous(tokenPromise, meta) {
+  await tokenPromise;
+  let revs = [], page = "";
+  do {
+    const r = await (await api("https://www.googleapis.com/drive/v3/files/" + meta.id +
+      "/revisions?pageSize=1000&fields=nextPageToken,revisions(id,modifiedTime)" + (page ? "&pageToken=" + page : ""))).json();
+    revs = revs.concat(r.revisions || []);
+    page = r.nextPageToken;
+  } while (page);
+  if (revs.length < 2) return null;
+  const prev = revs[revs.length - 2];
+  return (await api("https://www.googleapis.com/drive/v3/files/" + meta.id + "/revisions/" + prev.id + "?alt=media")).text();
+}

@@ -14,12 +14,14 @@ import { imageBlock } from "@milkdown/crepe/feature/image-block";
 import { table } from "@milkdown/crepe/feature/table";
 import { topBar } from "@milkdown/crepe/feature/top-bar";
 import { callCommand } from "@milkdown/kit/utils";
-import { remarkStringifyOptionsCtx, editorViewCtx } from "@milkdown/kit/core";
+import { remarkStringifyOptionsCtx, editorViewCtx, parserCtx } from "@milkdown/kit/core";
 import { blockServiceInstance } from "@milkdown/kit/plugin/block";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import * as drive from "./drive.js";
 import { ACTIONS, headingLevel, setHeading, indent, inCode } from "./panel.js";
 import { moveBlocks, multiRange, showRange, dragRange } from "./move.js";
+import { changesPlugin, diffDecorations, setDecorations, spotPositions } from "./changes.js";
+import { DecorationSet } from "@milkdown/kit/prose/view";
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
 import "@milkdown/crepe/theme/common/block-edit.css";
@@ -34,7 +36,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-10-01 12:00";
+const VERSION = "2026-10-02 12:00";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -88,6 +90,7 @@ function renderTitle() {
 
 async function openText(name, text, handle, restoredMd) {
   const m = FM.exec(text);
+  chg.base = null; showChgBar();
   doc.name = name; doc.handle = handle || null; doc.drive = null;
   doc.eol = /\r\n/.test(text) ? "\r\n" : "\n";
   doc.fm = m ? m[0] : "";
@@ -112,10 +115,12 @@ async function makeEditor(md) {
   if (touch) crepe.addFeature(topBar, JA.topBar);
   /* 保存するときの書き方を、よく使われる形にそろえる（箇条書きは「- 」、区切り線は「---」） */
   crepe.editor.config(ctx => ctx.update(remarkStringifyOptionsCtx, o => ({ ...o, bullet: "-", rule: "-" })));
+  /* 前に見た中身から変わった所に色を付ける部品 */
+  crepe.editor.use(changesPlugin);
   crepe.on(api => {
     api.markdownUpdated((ctx, md) => {
       doc.md = md;
-      renderTitle(); updateUndo(); schedulePanel();
+      renderTitle(); updateUndo(); schedulePanel(); showChgBar();
       clearTimeout(openText.t);
       openText.t = setTimeout(saveDraft, 400);
     });
@@ -349,6 +354,7 @@ async function setReadonly(on) {
   const y = window.scrollY, saved = doc.saved;
   await makeEditor(doc.md);
   doc.saved = saved; renderTitle();
+  applyChanges();
   window.scrollTo(0, y);
 }
 els.view.addEventListener("click", () => { setReadonly(!readonly); toast(readonly ? "閲覧に切り替えました" : "編集に切り替えました"); });
@@ -391,6 +397,7 @@ async function pick() {
     const f = await h.getFile();
     await openText(f.name, await readFile(f), h);
     toast(f.name + " を開きました");
+    afterOpen();
   } catch (e) { /* 取り消し */ }
 }
 /* 「開く」: ドライブが使えるときは、この端末かドライブかを選ぶ小さなメニューを出す */
@@ -451,6 +458,7 @@ async function pickDrive(meta) {
     await openText(meta.name, text);
     doc.drive = meta; renderTitle(); saveDraft();
     sheet.hidden = true;
+    afterOpen();
     toast("ドライブの " + meta.name + " を開きました");
   } catch (e) {
     note(e && e.message === "expired" ? "ログインの期限が切れたため、開けません。閉じてから、もう一度「開く」を押してください。"
@@ -471,6 +479,7 @@ els.picker.addEventListener("change", async e => {
   if (!f) return;
   await openText(f.name, await readFile(f));
   toast(f.name + " を開きました");
+  afterOpen();
 });
 $("#btnNew").addEventListener("click", async () => {
   if (!confirmDiscard()) return;
@@ -495,6 +504,7 @@ window.addEventListener("drop", async e => {
   const handle = h && h.kind === "file" ? h : null;
   await openText(f.name, await readFile(f), handle);
   toast(f.name + " を開きました");
+  afterOpen();
 });
 
 /* URL の # で受け取る（iPhone のショートカットから）: index.html#name=メモ.md&md=<URLエンコードした本文> */
@@ -518,6 +528,7 @@ async function openFromHash() {
   history.replaceState(null, "", location.pathname + location.search);
   if (!confirmDiscard()) return true;
   await openText(p.name || "共有.md", p.md || "");
+  afterOpen();
   toast((p.name || "共有.md") + " を開きました");
   return true;
 }
@@ -586,7 +597,88 @@ async function openMeta(meta, tp) {
   doc.drive = meta; renderTitle(); saveDraft();
   hideCard();
   toast("PC のファイルを開きました。保存するとPCにも反映されます");
+  afterOpen();
 }
+
+/* ------------------------------------------------------------ 前に見たときから変わった所 */
+/* この端末で前に開いた・保存した中身を、ファイルごとに覚えておく（新しい40件まで）。
+   次に開いたとき、そこから変わった所に色を付ける。覚えていなければ、ドライブの1つ前の版と比べる */
+const SEEN_MAX = 40;
+const docKey = () => doc.drive ? "d:" + doc.drive.id : doc.name ? "f:" + doc.name : null;
+function seenGet(k) {
+  try { const all = JSON.parse(localStorage.getItem("mdb.seen") || "{}"); return all[k] ? all[k].md : null; } catch (e) { return null; }
+}
+function seenSet(k, md) {
+  if (!k || md.length > 300000) return;
+  try {
+    const all = JSON.parse(localStorage.getItem("mdb.seen") || "{}");
+    all[k] = { md, t: Date.now() };
+    const keys = Object.keys(all).sort((a, b) => all[b].t - all[a].t);
+    for (const old of keys.slice(SEEN_MAX)) delete all[old];
+    localStorage.setItem("mdb.seen", JSON.stringify(all));
+  } catch (e) { /* 覚えられなくても、表示はふつうにできる */ }
+}
+
+const chg = { base: null, from: "", idx: -1 };
+async function afterOpen() {
+  const k = docKey();
+  if (!k) return;
+  const opened = doc.md, meta = doc.drive;
+  let base = seenGet(k), from = "seen";
+  seenSet(k, opened);
+  if (base == null && meta && drive.hasToken()) {
+    try {
+      const prev = await drive.previous(drive.getToken(), meta);
+      if (prev != null) {
+        const m = FM.exec(prev);
+        base = (m ? prev.slice(m[0].length) : prev).replace(/\r\n?/g, "\n");
+        from = "rev";
+      }
+    } catch (e) { /* 前の版が取れなければ、色は付けない */ }
+  }
+  /* 待っているあいだに別のファイルを開いていたら、何もしない */
+  if (base == null || docKey() !== k || base === opened) return;
+  chg.base = base; chg.from = from; chg.idx = -1;
+  applyChanges();
+}
+/* もとの中身と今の本文を比べて、色を付け直す */
+function applyChanges() {
+  if (!crepe || chg.base == null) return showChgBar();
+  try {
+    crepe.editor.action(ctx => {
+      const view = ctx.get(editorViewCtx);
+      const baseDoc = ctx.get(parserCtx)(chg.base);
+      setDecorations(view, diffDecorations(baseDoc, view.state.doc).set);
+    });
+  } catch (e) { chg.base = null; }
+  showChgBar();
+}
+function spots() {
+  let list = [];
+  if (crepe && chg.base != null) { try { crepe.editor.action(ctx => { list = spotPositions(ctx.get(editorViewCtx).state); }); } catch (e) {} }
+  return list;
+}
+function showChgBar() {
+  const n = spots().length;
+  $("#chgBar").hidden = !n;
+  document.body.classList.toggle("has-chg", !!n);
+  if (n) $("#chgText").textContent = (chg.from === "rev" ? "1つ前の版から" : "前に開いたときから") + "変わった所：" + n + "か所";
+}
+$("#chgNext").addEventListener("click", () => {
+  const list = spots();
+  if (!list.length) return;
+  chg.idx = (chg.idx + 1) % list.length;
+  crepe.editor.action(ctx => {
+    const view = ctx.get(editorViewCtx);
+    const c = view.coordsAtPos(list[chg.idx]);
+    window.scrollTo({ top: c.top + window.scrollY - window.innerHeight / 3, behavior: "smooth" });
+  });
+});
+$("#chgClear").addEventListener("click", () => {
+  chg.base = null;
+  if (crepe) crepe.editor.action(ctx => setDecorations(ctx.get(editorViewCtx), DecorationSet.empty));
+  showChgBar();
+});
 
 /* ------------------------------------------------------------ 保存 */
 async function writeTo(handle, text) {
@@ -595,7 +687,7 @@ async function writeTo(handle, text) {
   const w = await handle.createWritable();
   await w.write(text); await w.close();
 }
-function saved(msg) { doc.saved = doc.md; saveDraft(); renderTitle(); toast(msg); }
+function saved(msg) { doc.saved = doc.md; saveDraft(); renderTitle(); toast(msg); seenSet(docKey(), doc.md); }
 
 /* ドライブの原本に上書きする。ここも最初の await より前にトークンを頼む */
 async function saveDrive(text) {
@@ -684,6 +776,7 @@ const WELCOME = [
   "",
   "- 右上の「開く」から、この端末かGoogleドライブのファイルを選びます",
   "- PC では、ファイルをこの画面に置いても開けます",
+  "- 前に開いたときから変わった所は、文字の色が変わります（Claude が直した所の確認に）。色は表示だけで、ファイルには入りません",
   "",
   "| 操作 | PC | iPhone |",
   "| --- | --- | --- |",

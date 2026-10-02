@@ -241,6 +241,28 @@ body.readonly .panel .edit-only{display:none}
   .pc-box.sheet{max-height:calc(100dvh - 24px)}
 }
 
+/* ---------- 前に見たときから変わった所 ---------- */
+:root{--chg:#c2410c}
+:root[data-theme="dark"]{--chg:#fb923c}
+@media (prefers-color-scheme:dark){ :root[data-theme="auto"]{--chg:#fb923c} }
+.wrap .milkdown .ProseMirror .chg,.wrap .milkdown .ProseMirror .chg *{color:var(--chg)}
+.wrap .milkdown .ProseMirror .chg{background:color-mix(in srgb, var(--chg) 10%, transparent);border-radius:3px}
+.wrap .milkdown .ProseMirror .chg-node{outline:2px solid var(--chg);outline-offset:2px;border-radius:6px}
+.wrap .milkdown .ProseMirror .chg-del{display:inline-block;box-sizing:content-box;margin:0 4px 0 8px;padding:0 8px;border:1px solid var(--chg);border-radius:999px;
+  font-size:11px;font-weight:600;line-height:18px;letter-spacing:0;text-indent:0;vertical-align:2px;color:var(--chg);background:var(--bg);
+  user-select:none;-webkit-user-select:none;white-space:nowrap;cursor:default}
+.chgbar{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:55;
+  display:flex;align-items:center;gap:8px;max-width:calc(100% - 20px);padding:7px 8px 7px 14px;
+  background:var(--bg-elev);border:1px solid var(--chg);border-radius:999px;box-shadow:var(--shadow-md);font-size:13px;white-space:nowrap}
+.chgbar[hidden]{display:none}
+.chgbar #chgText{color:var(--chg);font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.chgbar .btn{width:auto;height:30px;padding:0 11px;border-radius:999px;font-size:12.5px}
+@media (min-width:821px){ body.has-chg .toast{bottom:76px} }
+@media (max-width:820px){
+  .chgbar{font-size:12px;gap:6px;padding:6px 6px 6px 12px}
+  .chgbar .btn{padding:0 9px;font-size:12px}
+}
+
 /* ---------- ドロップ・お知らせ ---------- */
 .dropzone{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:color-mix(in srgb, var(--bg) 80%, transparent);border:3px dashed var(--accent)}
 .dropzone.on{display:grid}
@@ -377,6 +399,7 @@ body.readonly .panel .edit-only{display:none}
   </div>
   <div class="ds-list" id="dsList"></div>
 </div></div>
+<div class="chgbar" id="chgBar" role="status" hidden><span id="chgText"></span><button class="btn" id="chgNext">次の変更へ</button><button class="btn" id="chgClear">色を消す</button></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="picker" accept=".md,.markdown,.mdx,.mkd,.txt,text/markdown,text/plain" hidden>
 <script>/*__JS__*/</script>
