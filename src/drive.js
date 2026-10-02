@@ -190,6 +190,12 @@ export async function findByPath(tokenPromise, localPath) {
   return { name, found: scored.filter(x => x.score === best), others: scored.length };
 }
 
+/* いまのファイルの情報（更新されたかを確かめる） */
+export async function meta(tokenPromise, m) {
+  await tokenPromise;
+  return (await api("https://www.googleapis.com/drive/v3/files/" + m.id + "?fields=" + FIELDS + "&supportsAllDrives=true")).json();
+}
+
 export async function read(tokenPromise, meta) {
   await tokenPromise;
   return (await api("https://www.googleapis.com/drive/v3/files/" + meta.id + "?alt=media&supportsAllDrives=true")).text();
