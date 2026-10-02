@@ -36,7 +36,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-10-02 12:00";
+const VERSION = "2026-10-02 20:00";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -61,46 +61,145 @@ function toast(msg) {
 /* ------------------------------------------------------------ 文書 */
 /* 編集部品はフロントマター（先頭の --- で囲んだ情報欄）を扱えないので、外しておいて保存時に戻す */
 const FM = /^﻿?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
-const doc = { name: "", fm: "", eol: "\n", handle: null, drive: null, saved: "", md: "" };
+/* 開いているファイル。1件ごとに中身・保存済みの中身・読んでいた位置・色付けの状態を持つ。
+   doc は、いま画面に出しているファイル（files の中の1件） */
+let uidSeq = Date.now();
+const blank = o => Object.assign({ uid: "f" + (uidSeq++), name: "", fm: "", eol: "\n", handle: null, drive: null, folder: "",
+  saved: "", md: "", scroll: 0, chgBase: null, chgFrom: "", chgCount: 0, welcome: false }, o);
+const files = [];
+let doc = blank();
 let crepe = null;
 
 const fullText = () => {
   const body = doc.md.replace(/\n/g, doc.eol);
   return doc.fm ? doc.fm + (doc.fm.endsWith("\n") ? "" : doc.eol) + body : body;
 };
-const isDirty = () => doc.md !== doc.saved;
+const dirtyOf = f => f.md !== f.saved;
+const isDirty = () => dirtyOf(doc);
 
+const IC = n => '<svg class="ic"><use href="#i-' + n + '"/></svg>';
 function renderTitle() {
-  els.name.innerHTML = "";
-  if (doc.drive) {
-    const g = document.createElement("span");
-    g.className = "gd"; g.title = "Googleドライブのファイル（保存するとドライブに上書き）";
-    g.innerHTML = DRIVE_ICON;
-    els.name.append(g);
-  }
-  els.name.append(doc.name || "無題.md");
-  if (isDirty()) {
-    const dot = document.createElement("span");
-    dot.className = "dot"; dot.textContent = " ●"; dot.title = "保存していない変更があります";
-    els.name.append(dot);
-  }
+  const nm = doc.name || "無題.md";
+  els.name.innerHTML =
+    (doc.drive ? '<span class="gd" title="Googleドライブのファイル（保存するとドライブに上書き）">' + DRIVE_ICON + "</span>" : "") +
+    (doc.folder ? '<span class="fold">' + esc(doc.folder) + '</span><span class="slash">/</span>' : "") +
+    '<span class="nm">' + esc(nm) + "</span>" +
+    (isDirty() ? '<span class="dot" title="保存していない変更があります"></span>' : "") +
+    '<svg class="car"><use href="#i-car"/></svg>';
+  els.name.title = (doc.folder ? doc.folder + " / " : "") + nm + "（押すと、開いているファイルを切り替えられます）";
   els.save.classList.toggle("dirty", isDirty());
-  document.title = (doc.name || "無題.md") + " — Markdown Viewer";
+  document.title = nm + " — Markdown Viewer";
+  renderFiles();
 }
 
-async function openText(name, text, handle, restoredMd) {
-  const m = FM.exec(text);
-  chg.base = null; showChgBar();
-  doc.name = name; doc.handle = handle || null; doc.drive = null;
-  doc.eol = /\r\n/.test(text) ? "\r\n" : "\n";
-  doc.fm = m ? m[0] : "";
-  const body = (m ? text.slice(m[0].length) : text).replace(/\r\n?/g, "\n");
+/* 開いているファイルの一覧（左のパネルと、ファイル名を押したときのメニュー） */
+function fileRow(f, inMenu) {
+  const b = document.createElement("div");
+  b.className = "frow" + (f === doc ? " on" : "");
+  b.setAttribute("role", "button"); b.tabIndex = 0;
+  b.title = (f.folder ? f.folder + " / " : "") + (f.name || "無題.md");
+  const cnt = f === doc ? spots().length : f.chgCount;
+  b.innerHTML = (f.drive ? '<span class="gd">' + DRIVE_ICON + "</span>" : IC("doc")) +
+    '<span class="nm">' + esc(f.name || "無題.md") + "</span>" +
+    (cnt ? '<span class="cnt" title="変わった所の数">' + cnt + "</span>" : "") +
+    (dirtyOf(f) ? '<span class="dot" title="保存していない変更があります"></span>' : "") +
+    '<button class="x" aria-label="閉じる" title="閉じる">' + IC("x") + "</button>";
+  b.addEventListener("click", e => {
+    if (e.target.closest(".x")) { e.stopPropagation(); closeFile(f); return; }
+    if (inMenu) $("#filesMenu").hidden = true;
+    if (f !== doc) show(f);
+  });
+  b.addEventListener("keydown", e => { if (e.key === "Enter") b.click(); });
+  return b;
+}
+function renderFiles() {
+  const list = $("#fileList"), menuEl = $("#filesMenu");
+  list.innerHTML = "";
+  files.forEach(f => list.append(fileRow(f, false)));
+  if (!menuEl.hidden) fillFilesMenu();
+}
+function fillFilesMenu() {
+  const menuEl = $("#filesMenu");
+  menuEl.innerHTML = "";
+  files.forEach(f => menuEl.append(fileRow(f, true)));
+  const add = document.createElement("button");
+  add.className = "frow add"; add.innerHTML = IC("plus") + '<span class="nm">ファイルを開く</span>';
+  add.addEventListener("click", e => { e.stopPropagation(); menuEl.hidden = true; startOpen(); });
+  menuEl.append(add);
+}
+els.name.addEventListener("click", e => {
+  e.stopPropagation();
+  const menuEl = $("#filesMenu");
+  menuEl.hidden = !menuEl.hidden;
+  if (!menuEl.hidden) fillFilesMenu();
+});
+document.addEventListener("click", e => { const m = $("#filesMenu"); if (!m.hidden && !m.contains(e.target)) m.hidden = true; });
 
-  await makeEditor(restoredMd != null ? restoredMd : body);
+/* 同じファイルがもう開いているか（ドライブは ID、この端末のファイルは同じファイルの手がかりか名前） */
+async function findOpen(name, opts) {
+  for (const f of files) {
+    if (opts.drive && f.drive && f.drive.id === opts.drive.id) return f;
+    if (!opts.drive && !f.drive && f.name === name) {
+      if (opts.handle && f.handle && f.handle.isSameEntry) { try { if (await f.handle.isSameEntry(opts.handle)) return f; } catch (e) {} continue; }
+      if (!opts.handle && !f.handle) return f;
+    }
+  }
+  return null;
+}
+/* ファイルを開く。開いていなければ一覧に足し、開いていれば中身を新しくする（保存していない変更があるときは、そのまま見せる） */
+async function openText(name, text, opts = {}) {
+  const m = FM.exec(text);
+  const body = (m ? text.slice(m[0].length) : text).replace(/\r\n?/g, "\n");
+  let f = await findOpen(name, opts);
+  if (f && dirtyOf(f)) {
+    await show(f);
+    toast("保存していない変更があるため、編集中の中身を表示しています");
+    return f;
+  }
+  if (!f) {
+    f = blank({ name });
+    /* まだ何も書いていない「ようこそ」は、ファイルを開いたら閉じる */
+    const w = files.findIndex(x => x.welcome && !dirtyOf(x));
+    if (w >= 0) files.splice(w, 1);
+    const at = files.indexOf(doc);
+    files.splice(at >= 0 ? at + 1 : files.length, 0, f);
+  }
+  Object.assign(f, { name, eol: /\r\n/.test(text) ? "\r\n" : "\n", fm: m ? m[0] : "", md: body, saved: null, scroll: 0,
+    chgBase: null, chgCount: 0, welcome: !!opts.welcome });
+  if (opts.handle !== undefined) f.handle = opts.handle || null;
+  if (opts.drive !== undefined) f.drive = opts.drive || null;
+  if (opts.folder !== undefined) f.folder = opts.folder || "";
+  await show(f, { fresh: true });
+  return f;
+}
+
+/* 画面に出すファイルを切り替える。fresh: 開いたばかり（部品が書き直した形を「保存済み」にする） */
+async function show(f, o = {}) {
+  if (doc !== f && files.includes(doc)) { doc.scroll = window.scrollY; doc.chgCount = spots().length; }
+  doc = f; chg.idx = -1;
+  const wasClean = f.md === f.saved;
+  await makeEditor(f.md);
   /* 部品が書き直した形を「保存済み」の基準にする（開いただけで ● が付かないように） */
-  doc.saved = restoredMd != null ? null : doc.md;
+  if (o.fresh || f.saved == null || wasClean) f.saved = f.md;
   renderTitle(); updateUndo();
-  if (!touch) els.root.querySelector(".ProseMirror")?.focus();
+  applyChanges();
+  window.scrollTo(0, f.scroll || 0);
+  if (!touch && o.fresh) els.root.querySelector(".ProseMirror")?.focus();
+  persist();
+  if (!o.fresh) refreshIfChanged(f);
+}
+
+/* 閉じる。保存していない変更があれば確かめる */
+async function closeFile(f) {
+  if (dirtyOf(f) && !confirm((f.name || "無題.md") + " には保存していない変更があります。変更を捨てて閉じますか？")) return;
+  const i = files.indexOf(f);
+  if (i < 0) return;
+  files.splice(i, 1);
+  if (f === doc) {
+    const next = files[Math.min(i, files.length - 1)];
+    if (next) await show(next);
+    else await openText("ようこそ.md", WELCOME, { welcome: true });
+  } else { renderFiles(); persist(); }
 }
 
 /* 編集部品を作り直す（ファイルを開いたとき・閲覧から編集に戻ったとき） */
@@ -121,8 +220,7 @@ async function makeEditor(md) {
     api.markdownUpdated((ctx, md) => {
       doc.md = md;
       renderTitle(); updateUndo(); schedulePanel(); showChgBar();
-      clearTimeout(openText.t);
-      openText.t = setTimeout(saveDraft, 400);
+      persist();
     });
     api.selectionUpdated(() => { followCaret(); schedulePanel(); });
   });
@@ -258,6 +356,15 @@ function updatePanel() {
   clearTimeout(updatePanel.t);
   updatePanel.t = setTimeout(updateToc, 300);
 }
+/* 読んでいる見出しを、目次で光らせる */
+function markTocCur() {
+  const links = [...document.querySelectorAll("#toc a")];
+  let cur = null;
+  for (const a of links) { if (a._h && a._h.getBoundingClientRect().top < 140) cur = a; }
+  if (!cur) cur = links[0];
+  links.forEach(a => a.classList.toggle("cur", a === cur));
+}
+window.addEventListener("scroll", () => { cancelAnimationFrame(markTocCur.f); markTocCur.f = requestAnimationFrame(markTocCur); }, { passive: true });
 function updateToc() {
   const toc = $("#toc");
   const hs = [...els.root.querySelectorAll(".ProseMirror > h1, .ProseMirror > h2, .ProseMirror > h3")].filter(h => h.textContent.trim());
@@ -267,9 +374,11 @@ function updateToc() {
     a.className = "l" + h.tagName[1];
     a.textContent = h.textContent;
     a.title = h.textContent;
+    a._h = h;
     a.addEventListener("click", () => window.scrollTo({ top: h.getBoundingClientRect().top + window.scrollY - 64, behavior: "smooth" }));
     toc.append(a);
   });
+  markTocCur();
   $("#stat").textContent = doc.md.replace(/\s/g, "").length.toLocaleString() + " 文字";
 }
 
@@ -351,9 +460,9 @@ async function setReadonly(on) {
   }
   /* 部品の書式バーは、一度閲覧にすると編集に戻しても出てこない（部品側の不具合）。
      なので今の本文で編集部品を作り直す。表示位置は保つ。戻る・やり直すの履歴はここで区切られる */
-  const y = window.scrollY, saved = doc.saved;
+  const y = window.scrollY;
   await makeEditor(doc.md);
-  doc.saved = saved; renderTitle();
+  renderTitle();
   applyChanges();
   window.scrollTo(0, y);
 }
@@ -376,32 +485,93 @@ const keep = btn => {
 els.undo.addEventListener("click", () => run(undoCommand)); keep(els.undo);
 els.redo.addEventListener("click", () => run(redoCommand)); keep(els.redo);
 
-/* ------------------------------------------------------------ 下書き */
-function saveDraft() {
-  store.set("draft", isDirty() ? { name: doc.name, fm: doc.fm, eol: doc.eol, md: doc.md, drive: doc.drive } : null);
+/* ------------------------------------------------------------ 開いているファイルを覚える（画面を更新しても戻る） */
+/* ブラウザの中の保存場所（IndexedDB）に、開いているファイル・中身・読んでいた位置を残す。
+   保存していない編集もここに残るので、画面を更新しても消えない */
+const idb = (() => {
+  let p = null;
+  const open = () => p || (p = new Promise((res, rej) => {
+    const r = indexedDB.open("mdb", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const tx = (mode, fn) => open().then(db => new Promise((res, rej) => {
+    const t = db.transaction("kv", mode), st = t.objectStore("kv"), r = fn(st);
+    t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  }));
+  return { get: k => tx("readonly", st => st.get(k)), set: (k, v) => tx("readwrite", st => st.put(v, k)) };
+})();
+let persistOk = true, restoring = true;
+function snapshot(withHandles) {
+  return {
+    active: doc.uid,
+    files: files.map(f => ({ uid: f.uid, name: f.name, fm: f.fm, eol: f.eol, drive: f.drive, folder: f.folder, saved: f.saved, md: f.md,
+      scroll: f === doc ? window.scrollY : f.scroll, chgBase: f.chgBase, chgFrom: f.chgFrom, chgCount: f === doc ? spots().length : f.chgCount,
+      welcome: f.welcome, handle: withHandles ? f.handle : null })),
+  };
 }
-window.addEventListener("beforeunload", e => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+function persist() {
+  if (restoring) return;
+  clearTimeout(persist.t);
+  persist.t = setTimeout(async () => {
+    try { await idb.set("session", snapshot(true)); persistOk = true; }
+    catch (e) {
+      /* ファイルの手がかりを入れられないブラウザでは、手がかりなしで残す */
+      try { await idb.set("session", snapshot(false)); persistOk = true; } catch (e2) { persistOk = false; }
+    }
+  }, 400);
+}
+window.addEventListener("scroll", () => { clearTimeout(persist.s); persist.s = setTimeout(persist, 600); }, { passive: true });
+/* 残せなかったときだけ、閉じる前に確かめる */
+window.addEventListener("beforeunload", e => { if (!persistOk && files.some(dirtyOf)) { e.preventDefault(); e.returnValue = ""; } });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && !restoring) { clearTimeout(persist.t); idb.set("session", snapshot(true)).catch(() => idb.set("session", snapshot(false)).catch(() => {})); } });
+
+/* 前に開いたあとで、ドライブ側で更新されていたら読み直す（保存していない変更があるときは読み直さない） */
+async function refreshIfChanged(f) {
+  if (!f.drive || f._checked || dirtyOf(f) || !drive.hasToken()) return;
+  f._checked = true;
+  try {
+    const now = await drive.meta(drive.getToken(), f.drive);
+    if (!now || now.modifiedTime === f.drive.modifiedTime || f !== doc || dirtyOf(f)) return;
+    const text = await drive.read(drive.getToken(), now);
+    if (f !== doc || dirtyOf(f)) return;
+    await openText(now.name, text, { drive: now, folder: f.folder });
+    toast(now.name + " はドライブで更新されていたため、読み直しました");
+    afterOpen();
+  } catch (e) { /* 読み直せなければ、覚えていた中身のまま */ }
+}
 
 /* ------------------------------------------------------------ 開く */
 const OK = /\.(md|markdown|mkd|mdown|mdx|txt|text)$/i;
 const DRIVE_ICON = '<svg viewBox="0 0 87.3 78" aria-hidden="true"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>';
 const readFile = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsText(f, "UTF-8"); });
-const confirmDiscard = () => !isDirty() || confirm("保存していない変更があります。変更を捨てて開きますか？");
 
 async function pick() {
-  if (!confirmDiscard()) return;
   if (!window.showOpenFilePicker || touch) { els.picker.click(); return; }
   try {
     const [h] = await showOpenFilePicker({ types: [{ description: "Markdown",
       accept: { "text/markdown": [".md", ".markdown", ".mdx", ".mkd"], "text/plain": [".txt"] } }] });
     const f = await h.getFile();
-    await openText(f.name, await readFile(f), h);
+    await openText(f.name, await readFile(f), { handle: h });
     toast(f.name + " を開きました");
     afterOpen();
   } catch (e) { /* 取り消し */ }
 }
 /* 「開く」: ドライブが使えるときは、この端末かドライブかを選ぶ小さなメニューを出す */
-const menu = $("#openMenu");
+const menu = $("#openMenu"), pMenu = $("#pOpenMenu");
+function startOpen() {
+  if (!drive.configured()) return pick();
+  if (document.body.classList.contains("has-panel")) pMenu.hidden = false;
+  else menu.hidden = false;
+}
+$("#pOpen").addEventListener("click", e => { e.stopPropagation(); if (!drive.configured()) return pick(); pMenu.hidden = !pMenu.hidden; });
+pMenu.addEventListener("click", e => {
+  const b = e.target.closest("[data-o]"); if (!b) return;
+  pMenu.hidden = true;
+  if (b.dataset.o === "drive") openDrive(); else pick();
+});
+document.addEventListener("click", e => { if (!pMenu.hidden && !pMenu.contains(e.target)) pMenu.hidden = true; });
+$("#pNew").addEventListener("click", () => newFile());
 $("#btnOpen").addEventListener("click", e => {
   if (!drive.configured()) return pick();
   e.stopPropagation();
@@ -416,13 +586,87 @@ $("#openDrive").addEventListener("click", () => { menu.hidden = true; openDrive(
 const sheet = $("#driveSheet"), dsList = $("#dsList"), dsQuery = $("#dsQuery");
 const fmtTime = t => { try { return new Date(t).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } };
 const note = html => { dsList.innerHTML = '<p class="ds-note">' + html + "</p>"; };
+/* 「最近のファイル」と「フォルダから選ぶ」。どちらで開いたか・最後にいたフォルダは端末ごとに覚える */
+let dsMode = store.get("dsMode", "recent");
+let dsStack = store.get("dsPath", []);
+function setMode(m) {
+  dsMode = m; store.set("dsMode", m);
+  document.querySelectorAll(".ds-tabs button").forEach(b => { b.classList.toggle("on", b.dataset.m === m); b.setAttribute("aria-selected", String(b.dataset.m === m)); });
+  $("#dsSearch").hidden = m !== "recent";
+  $("#dsPath").hidden = m !== "folder";
+}
+document.querySelectorAll(".ds-tabs button").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.m === dsMode) return;
+  setMode(b.dataset.m);
+  if (dsMode === "recent") showList(drive.getToken(), dsQuery.value.trim()); else showFolder(drive.getToken());
+}));
 async function openDrive() {
-  if (!confirmDiscard()) return;
   if (!drive.ready()) { toast("Googleドライブに接続中です。数秒待ってから、もう一度押してください"); return; }
   const tp = drive.getToken();
   dsQuery.value = "";
   sheet.hidden = false;
-  showList(tp, "");
+  setMode(dsMode);
+  if (dsMode === "recent") showList(tp, ""); else showFolder(tp);
+}
+/* フォルダの中を並べる。dsStack が空なら、いちばん上（マイドライブ・パソコン） */
+function renderPath() {
+  const nav = $("#dsPath");
+  nav.innerHTML = "";
+  const crumbs = [{ name: "ドライブ" }].concat(dsStack);
+  crumbs.forEach((c, i) => {
+    if (i) { const sl = document.createElement("span"); sl.className = "sl"; sl.textContent = "/"; nav.append(sl); }
+    const b = document.createElement("button");
+    b.textContent = c.name; b.title = c.name;
+    b.addEventListener("click", () => { dsStack = dsStack.slice(0, i); showFolder(drive.getToken()); });
+    nav.append(b);
+  });
+}
+function folderButton(icon, name, sub, onClick) {
+  const b = document.createElement("button");
+  b.className = "ds-item fo";
+  b.innerHTML = IC(icon) + "<b>" + esc(name) + (sub ? "<small>" + esc(sub) + "</small>" : "") + "</b>" + IC("chev");
+  b.addEventListener("click", onClick);
+  return b;
+}
+async function showFolder(tp) {
+  const seq = ++listSeq;
+  store.set("dsPath", dsStack);
+  renderPath();
+  note("読み込んでいます…");
+  try {
+    if (!dsStack.length) {
+      const rs = await drive.roots(tp);
+      if (seq !== listSeq || sheet.hidden) return;
+      dsList.innerHTML = "";
+      for (const r of rs) {
+        dsList.append(folderButton(r.kind === "pc" ? "pc" : "drive", r.name, r.kind === "pc" ? "パソコンから同期しているフォルダ" : "",
+          () => { dsStack = [{ id: r.id, name: r.name }]; showFolder(drive.getToken()); }));
+      }
+      return;
+    }
+    const here = dsStack[dsStack.length - 1];
+    const c = await drive.children(tp, here.id);
+    if (seq !== listSeq || sheet.hidden) return;
+    dsList.innerHTML = "";
+    for (const fo of c.folders) {
+      dsList.append(folderButton("folder", fo.name, "", () => { dsStack = dsStack.concat([{ id: fo.id, name: fo.name }]); showFolder(drive.getToken()); }));
+    }
+    for (const f of c.files) {
+      const b = document.createElement("button");
+      b.className = "ds-item";
+      b.innerHTML = '<span class="fi">' + IC("doc") + "<b>" + esc(f.meta.name) + "<small>" + esc(fmtTime(f.meta.modifiedTime)) + "</small></b></span>";
+      b.addEventListener("click", () => pickDrive(f.meta, here.name));
+      dsList.append(b);
+    }
+    if (!c.folders.length && !c.files.length) note("このフォルダには、フォルダも md ファイルもありません。上の「/」の左の名前を押すと、前のフォルダに戻れます。");
+  } catch (e) {
+    if (seq !== listSeq) return;
+    if (e && e.name === "AbortError") { sheet.hidden = true; return; }
+    /* 覚えていたフォルダが消えていたときなどは、いちばん上に戻す */
+    if (dsStack.length && !(e && e.message === "expired")) { dsStack = []; store.set("dsPath", dsStack); }
+    note(e && e.message === "expired" ? "ログインの期限が切れたため、フォルダを出せません。閉じてから、もう一度「開く」を押してください。"
+                                      : "通信がうまくいかず、フォルダを出せません。通信を確かめて、閉じてからもう一度「開く」を押してください。");
+  }
 }
 let listSeq = 0;
 async function showList(tp, q) {
@@ -440,7 +684,7 @@ async function showList(tp, q) {
       const b = document.createElement("button");
       b.className = "ds-item";
       b.innerHTML = "<b>" + esc(f.meta.name) + "</b><small>" + esc([f.folder, fmtTime(f.meta.modifiedTime)].filter(Boolean).join(" ・ ")) + "</small>";
-      b.addEventListener("click", () => pickDrive(f.meta));
+      b.addEventListener("click", () => pickDrive(f.meta, f.folder));
       dsList.append(b);
     }
   } catch (e) {
@@ -450,13 +694,12 @@ async function showList(tp, q) {
                                       : "通信がうまくいかず、一覧を出せません。通信を確かめて、閉じてからもう一度「開く」を押してください。");
   }
 }
-async function pickDrive(meta) {
+async function pickDrive(meta, folder) {
   listSeq++;
   note(esc(meta.name) + " を読み込んでいます…");
   try {
     const text = await drive.read(drive.getToken(), meta);
-    await openText(meta.name, text);
-    doc.drive = meta; renderTitle(); saveDraft();
+    await openText(meta.name, text, { drive: meta, folder: folder || "" });
     sheet.hidden = true;
     afterOpen();
     toast("ドライブの " + meta.name + " を開きました");
@@ -477,14 +720,17 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && !sheet.hid
 els.picker.addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f) return;
-  await openText(f.name, await readFile(f));
+  await openText(f.name, await readFile(f), { handle: null });
   toast(f.name + " を開きました");
   afterOpen();
 });
-$("#btnNew").addEventListener("click", async () => {
-  if (!confirmDiscard()) return;
-  await openText("無題.md", "");
-});
+/* 新しいファイル。名前が重ならないように番号を付ける */
+async function newFile() {
+  let name = "無題.md", n = 2;
+  while (files.some(f => f.name === name && !f.drive && !f.handle)) name = "無題 " + (n++) + ".md";
+  await openText(name, "", { handle: null, drive: null, folder: "" });
+}
+$("#btnNew").addEventListener("click", newFile);
 
 let depth = 0;
 window.addEventListener("dragenter", e => { if ([...(e.dataTransfer.types || [])].includes("Files")) { e.preventDefault(); depth++; els.drop.classList.add("on"); } });
@@ -498,11 +744,10 @@ window.addEventListener("drop", async e => {
   const it = e.dataTransfer.items && e.dataTransfer.items[0];
   const hp = it && it.getAsFileSystemHandle ? it.getAsFileSystemHandle().catch(() => null) : null;
   if (!f || !OK.test(f.name)) { toast("Markdown（.md）ではないため開けません。.md か .txt のファイルを置いてください"); return; }
-  if (!confirmDiscard()) return;
   /* 上書き保存に使う手がかり（Chrome / Edge のみ） */
   const h = hp && await hp;
   const handle = h && h.kind === "file" ? h : null;
-  await openText(f.name, await readFile(f), handle);
+  await openText(f.name, await readFile(f), { handle });
   toast(f.name + " を開きました");
   afterOpen();
 });
@@ -526,8 +771,7 @@ async function openFromHash() {
     if (i > 0) { try { p[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) { return false; } }
   }
   history.replaceState(null, "", location.pathname + location.search);
-  if (!confirmDiscard()) return true;
-  await openText(p.name || "共有.md", p.md || "");
+  await openText(p.name || "共有.md", p.md || "", { handle: null, drive: null });
   afterOpen();
   toast((p.name || "共有.md") + " を開きました");
   return true;
@@ -580,21 +824,21 @@ async function findAndOpen(path, head, tp) {
     if (r.found.length > 1) {
       /* 同じ名前・同じ場所に見えるファイルが複数あるときは選んでもらう */
       return showCard(head + '<p>同じ名前のファイルが複数あります。開くものを選んでください。</p>',
-        r.found.slice(0, 6).map(f => [f.where || f.meta.name, () => openMeta(f.meta, tp)]).concat([["やめる", hideCard]]));
+        r.found.slice(0, 6).map(f => [f.where || f.meta.name, () => openMeta(f.meta, tp, f.where)]).concat([["やめる", hideCard]]));
     }
-    await openMeta(r.found[0].meta, tp);
+    await openMeta(r.found[0].meta, tp, r.found[0].where);
   } catch (e) {
     if (e && e.name === "AbortError") return hideCard();
     showCard(head + '<p>' + (e && e.message === "expired" ? "ログインの期限が切れたため、開けません。リンクをもう一度押してください。" : "通信がうまくいかず、開けません。少し待ってから、リンクをもう一度押してください。") + '</p>', [["閉じる", hideCard]]);
   }
 }
 
-async function openMeta(meta, tp) {
-  if (!confirmDiscard()) return hideCard();
+async function openMeta(meta, tp, where) {
   showCard('<b>' + esc(meta.name) + '</b><p>読み込んでいます…</p>', []);
   const text = await drive.read(tp || drive.getToken(), meta);
-  await openText(meta.name, text);
-  doc.drive = meta; renderTitle(); saveDraft();
+  /* where は「マイドライブ / フォルダ / …」。いちばん近いフォルダの名前を出す */
+  const folder = where ? where.split(" / ").pop() : "";
+  await openText(meta.name, text, { drive: meta, folder });
   hideCard();
   toast("PC のファイルを開きました。保存するとPCにも反映されます");
   afterOpen();
@@ -619,10 +863,10 @@ function seenSet(k, md) {
   } catch (e) { /* 覚えられなくても、表示はふつうにできる */ }
 }
 
-const chg = { base: null, from: "", idx: -1 };
+const chg = { idx: -1 };
 async function afterOpen() {
   const k = docKey();
-  if (!k) return;
+  if (!k || doc.welcome) return;
   const opened = doc.md, meta = doc.drive;
   let base = seenGet(k), from = "seen";
   seenSet(k, opened);
@@ -638,31 +882,32 @@ async function afterOpen() {
   }
   /* 待っているあいだに別のファイルを開いていたら、何もしない */
   if (base == null || docKey() !== k || base === opened) return;
-  chg.base = base; chg.from = from; chg.idx = -1;
-  applyChanges();
+  doc.chgBase = base; doc.chgFrom = from; chg.idx = -1;
+  applyChanges(); persist();
 }
 /* もとの中身と今の本文を比べて、色を付け直す */
 function applyChanges() {
-  if (!crepe || chg.base == null) return showChgBar();
+  if (!crepe || doc.chgBase == null) return showChgBar();
   try {
     crepe.editor.action(ctx => {
       const view = ctx.get(editorViewCtx);
-      const baseDoc = ctx.get(parserCtx)(chg.base);
+      const baseDoc = ctx.get(parserCtx)(doc.chgBase);
       setDecorations(view, diffDecorations(baseDoc, view.state.doc).set);
     });
-  } catch (e) { chg.base = null; }
+  } catch (e) { doc.chgBase = null; }
   showChgBar();
 }
 function spots() {
   let list = [];
-  if (crepe && chg.base != null) { try { crepe.editor.action(ctx => { list = spotPositions(ctx.get(editorViewCtx).state); }); } catch (e) {} }
+  if (crepe && doc.chgBase != null) { try { crepe.editor.action(ctx => { list = spotPositions(ctx.get(editorViewCtx).state); }); } catch (e) {} }
   return list;
 }
 function showChgBar() {
   const n = spots().length;
   $("#chgBar").hidden = !n;
   document.body.classList.toggle("has-chg", !!n);
-  if (n) $("#chgText").textContent = (chg.from === "rev" ? "1つ前の版から" : "前に開いたときから") + "変わった所：" + n + "か所";
+  if (n !== showChgBar.n) { showChgBar.n = n; renderFilesSoon(); }
+  if (n) $("#chgText").textContent = (doc.chgFrom === "rev" ? "1つ前の版から" : "前に開いたときから") + "変わった所：" + n + "か所";
 }
 $("#chgNext").addEventListener("click", () => {
   const list = spots();
@@ -674,8 +919,9 @@ $("#chgNext").addEventListener("click", () => {
     window.scrollTo({ top: c.top + window.scrollY - window.innerHeight / 3, behavior: "smooth" });
   });
 });
+function renderFilesSoon() { clearTimeout(renderFilesSoon.t); renderFilesSoon.t = setTimeout(renderFiles, 50); }
 $("#chgClear").addEventListener("click", () => {
-  chg.base = null;
+  doc.chgBase = null; persist();
   if (crepe) crepe.editor.action(ctx => setDecorations(ctx.get(editorViewCtx), DecorationSet.empty));
   showChgBar();
 });
@@ -687,7 +933,7 @@ async function writeTo(handle, text) {
   const w = await handle.createWritable();
   await w.write(text); await w.close();
 }
-function saved(msg) { doc.saved = doc.md; saveDraft(); renderTitle(); toast(msg); seenSet(docKey(), doc.md); }
+function saved(msg) { doc.saved = doc.md; renderTitle(); toast(msg); seenSet(docKey(), doc.md); persist(); }
 
 /* ドライブの原本に上書きする。ここも最初の await より前にトークンを頼む */
 async function saveDrive(text) {
@@ -714,7 +960,7 @@ async function saveDoc() {
     if (window.showSaveFilePicker && !touch) {
       const h = await showSaveFilePicker({ suggestedName: name,
         types: [{ description: "Markdown", accept: { "text/markdown": [".md", ".markdown", ".mdx", ".mkd", ".txt"] } }] });
-      await writeTo(h, text); doc.handle = h; doc.name = h.name;
+      await writeTo(h, text); doc.handle = h; doc.name = h.name; doc.welcome = false;
       return saved(h.name + " に保存しました");
     }
     const file = new File([text], name, { type: "text/plain" });
@@ -789,15 +1035,32 @@ const WELCOME = [
 applyPanel();
 drive.preload().catch(() => { /* 読めなければドライブのメニューは使えないだけ */ });
 
-(async () => {
-  if (await openFromHash()) return;
+/* 起動: 前に開いていたファイルを戻す。なければ「ようこそ」を出す */
+async function restore() {
+  let ses = null;
+  try { ses = await idb.get("session"); } catch (e) { persistOk = false; }
+  if (ses && ses.files && ses.files.length) {
+    for (const x of ses.files) files.push(blank(x));
+    const act = files.find(f => f.uid === ses.active) || files[0];
+    await show(act);
+    return true;
+  }
+  /* 前の作りで残した下書き（1件だけ）があれば、それを戻す */
   const d = store.get("draft", null);
   if (d && typeof d.md === "string") {
-    doc.fm = d.fm || ""; await openText(d.name || "無題.md", "", null, d.md);
-    doc.fm = d.fm || ""; doc.eol = d.eol || "\n";
-    if (d.drive && d.drive.id) { doc.drive = d.drive; renderTitle(); }
+    const f = blank({ name: d.name || "無題.md", fm: d.fm || "", eol: d.eol || "\n", drive: d.drive && d.drive.id ? d.drive : null, md: d.md, saved: "" });
+    files.push(f);
+    await show(f);
+    store.set("draft", null);
     toast("保存していない編集を復元しました");
-    return;
+    return true;
   }
-  await openText("ようこそ.md", WELCOME);
+  return false;
+}
+
+(async () => {
+  const had = await restore();
+  if (!had) await openText("ようこそ.md", WELCOME, { welcome: true });
+  restoring = false; persist();
+  await openFromHash();
 })();
