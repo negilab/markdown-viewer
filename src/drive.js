@@ -12,6 +12,9 @@
 /* Google Cloud Console で作った値。ページの中で使う公開用の値で、秘密ではない */
 export const GOOGLE = {
   clientId: "735606358037-k1u1cesfr0u1hmummenlj1tbr35it7tr.apps.googleusercontent.com",   /* OAuth クライアント ID（…apps.googleusercontent.com） */
+  /* 和訳（Cloud Translation API）用の API キー。Google Cloud 側で、使えるサイトを negilab.github.io に、
+     使える API を Cloud Translation API に絞っておく。空なら「和訳を表示」は出さない */
+  translateKey: "AIzaSyAUdDVF1N04ESyrJH7IlWm5oYR51JD7kN8",
 };
 
 const SCOPE = "https://www.googleapis.com/auth/drive";
