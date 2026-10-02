@@ -37,7 +37,7 @@ import "@milkdown/crepe/theme/common/top-bar.css";
 import "@milkdown/crepe/theme/classic.css";
 
 /* キャッシュで古い画面が出ていないか確かめる用。設定メニューの下に「最終更新」として出す */
-const VERSION = "2026-10-03 12:00";
+const VERSION = "2026-10-03 13:00";
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("mdb." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -52,11 +52,12 @@ const els = {
 let readonly = false;
 document.querySelectorAll(".app-ver").forEach(e => e.textContent = VERSION);
 
+/* お知らせ。長い文（エラーなど）は、読み切れるよう長めに出す */
 function toast(msg) {
   els.toast.textContent = msg;
   els.toast.classList.add("on");
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => els.toast.classList.remove("on"), 1900);
+  toast.t = setTimeout(() => els.toast.classList.remove("on"), Math.min(9000, Math.max(1900, msg.length * 110)));
 }
 
 /* ------------------------------------------------------------ 文書 */
@@ -958,8 +959,11 @@ async function applyTr(manual) {
     const why = String(e.reason || "");
     toast(e.status === 403 || e.status === 400
       ? (/billing/i.test(why) ? "Google Cloud で支払い方法が登録されていないため、訳せません。登録してから、もう一度押してください"
-        : /not been used|disabled/i.test(why) ? "Google Cloud で翻訳サービスが有効になっていないため、訳せません。有効にしてから、もう一度押してください"
-        : "翻訳サービスの API キーが使えないため、訳せません。Google Cloud で API キーの設定を確かめてください")
+        : /not been used|SERVICE_DISABLED|is disabled/i.test(why) ? "Google Cloud で Cloud Translation API が有効になっていないため、訳せません。有効にして数分待ってから、もう一度押してください"
+        : /referer|referrer/i.test(why) ? "このサイトから API キーを使う許可がないため、訳せません。Google Cloud で API キーの「ウェブサイトの制限」を確かめてください"
+        : /blocked/i.test(why) ? "API キーで翻訳が許可されていないため、訳せません。Google Cloud で API キーの「APIの制限」に Cloud Translation API を足してください"
+        : /not valid|invalid/i.test(why) ? "API キーが見つからないため、訳せません。Google Cloud で API キーを作り直してください"
+        : "翻訳サービスに断られたため、訳せません。Google Cloud で Cloud Translation API と API キーの設定を確かめてください")
       : e.status === 429 ? "翻訳サービスの上限に達したため、訳せません。少し待ってから、もう一度押してください"
       : "通信がうまくいかず、訳せません。通信を確かめて、もう一度押してください");
     return;

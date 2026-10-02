@@ -338,8 +338,10 @@ body.readonly .panel .edit-only{display:none}
 .dropzone p{font-size:18px;font-weight:700;color:var(--accent)}
 .toast{
   position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);z-index:70;
-  background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13px;
-  box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;white-space:nowrap;
+  background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:18px;font-size:13px;line-height:1.55;
+  box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;
+  /* 長い文は折り返して、画面の中に収める */
+  width:max-content;max-width:min(560px, calc(100vw - 24px));text-align:center;overflow-wrap:anywhere;
 }
 .toast.on{opacity:1;transform:translate(-50%,0)}
 
