@@ -12,15 +12,17 @@
 /* Google Cloud Console で作った値。ページの中で使う公開用の値で、秘密ではない */
 export const GOOGLE = {
   clientId: "735606358037-k1u1cesfr0u1hmummenlj1tbr35it7tr.apps.googleusercontent.com",   /* OAuth クライアント ID（…apps.googleusercontent.com） */
-  /* 和訳（Cloud Translation API）用の API キー。Google Cloud 側で、使えるサイトを negilab.github.io に、
-     使える API を Cloud Translation API に絞っておく。空なら「和訳を表示」は出さない */
-  translateKey: "AIzaSyAUdDVF1N04ESyrJH7IlWm5oYR51JD7kN8",
+  /* 和訳（Cloud Translation API）を使う Google Cloud のプロジェクト番号。API キーは使わず、
+     ログインした本人の権限で頼み、料金はこのプロジェクトに付ける。空なら「和訳を表示」は出さない */
+  translateProject: "735606358037",
 };
 
-const SCOPE = "https://www.googleapis.com/auth/drive";
+/* ドライブ全体と、和訳（Cloud Translation API）。和訳の許可を足したので、前のログインは1回だけ取り直しになる */
+const SCOPE = "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/cloud-translation";
+const TR_SCOPE = "https://www.googleapis.com/auth/cloud-translation";
 export const configured = () => !!GOOGLE.clientId;
 
-let tokenClient = null, token = null, tokenExp = 0, pending = null;
+let tokenClient = null, token = null, tokenExp = 0, pending = null, trGranted = true;
 
 /* リンクから開くたびにログインを押さなくて済むよう、有効期限（約1時間）までこの端末に覚えておく */
 const TOKEN_KEY = "mdb.gtoken";
@@ -71,6 +73,8 @@ async function load() {
       }
       token = r.access_token;
       tokenExp = Date.now() + (Number(r.expires_in) || 3600) * 1000 - 60000;
+      /* 許可の画面で、和訳だけ外されることがある（項目ごとに選べる）。そのときは和訳のときに知らせる */
+      trGranted = !window.google.accounts.oauth2.hasGrantedAllScopes || window.google.accounts.oauth2.hasGrantedAllScopes(r, TR_SCOPE);
       keepToken();
       rememberEmail();
       p.res(token);
@@ -91,6 +95,25 @@ export function getToken() {
     const email = getEmail();
     tokenClient.requestAccessToken(email ? { prompt: "", login_hint: email } : { prompt: "select_account" });
   });
+}
+
+/* ログインを捨てる（次に押したとき、許可の画面からやり直す） */
+export function dropToken() { token = null; tokenExp = 0; try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+export const translateGranted = () => trGranted;
+
+/* 和訳を頼む。料金と上限は GOOGLE.translateProject に付ける */
+export async function translate(tokenPromise, body) {
+  const t = await tokenPromise;
+  const r = await fetch("https://translation.googleapis.com/language/translate/v2", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + t, "x-goog-user-project": GOOGLE.translateProject },
+    body: JSON.stringify(body),
+  });
+  if (r.ok) return r.json();
+  let reason = "";
+  try { const e = (await r.json()).error || {}; reason = (e.message || "") + " " + JSON.stringify(e.details || []); } catch (e) {}
+  if (r.status === 401) { dropToken(); throw Object.assign(new Error("expired"), { status: 401, reason }); }
+  throw Object.assign(new Error("translate " + r.status), { status: r.status, reason });
 }
 
 async function api(url, opts = {}) {

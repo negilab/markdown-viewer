@@ -52,7 +52,7 @@ PCでは左にパネルが出ます。上から次の3つが並びます。左�
 - 一度訳した文はこの端末に覚えておき、もう一度は訳しません。表示するかどうかも端末ごとに覚えます
 - 翻訳には Google の翻訳サービス（Cloud Translation API）を使います。訳す文章は Google に送られます。毎月 50 万文字までは無料です
 
-使うには、Google Cloud のプロジェクトで Cloud Translation API を有効にし、支払い方法を登録します。API キーは、使えるサイトを `https://negilab.github.io/*` に、使える API を Cloud Translation API に絞って、`src/drive.js` の `GOOGLE.translateKey` に入れます。空なら「和訳を表示」は出ません。
+使うには、Google Cloud のプロジェクトで Cloud Translation API を有効にし、支払い方法を登録します。API キーは使いません。Googleドライブと同じログインで頼み、料金は `src/drive.js` の `GOOGLE.translateProject`（プロジェクト番号）に付けます。初めて押したときだけ、Google の許可の画面が出ます。ログインするアカウントには、そのプロジェクトで翻訳を使う権限（持ち主なら付いています）が必要です。
 
 ### 変わった所に色を付ける
 
