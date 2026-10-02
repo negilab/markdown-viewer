@@ -199,42 +199,61 @@ export function splitPath(p) {
   return String(p).trim().replace(/^["']|["']$/g, "").replace(/\//g, "\\").split("\\").filter(Boolean);
 }
 
+const FIND_Q = "&pageSize=100&fields=files(" + FIELDS + ",parents)" + DRIVE_Q;
+const filesWhere = async cond => (await (await api("https://www.googleapis.com/drive/v3/files?q=" +
+  encodeURIComponent(cond + " and trashed = false") + FIND_Q)).json()).files || [];
+const notFolder = " and mimeType != '" + FOLDER + "'";
+/* 親フォルダの名前が分かれば、先にそのフォルダを探して、その中だけからファイルを探す。
+   README.md のようにどこにでもある名前は、名前だけで探すと本物が候補から漏れるため */
+async function inParent(parentName, n) {
+  const dirs = (await (await api("https://www.googleapis.com/drive/v3/files?q=" +
+    encodeURIComponent("name = " + qstr(parentName) + " and mimeType = '" + FOLDER + "' and trashed = false") +
+    "&pageSize=30&fields=files(id)" + DRIVE_Q)).json()).files || [];
+  if (!dirs.length) return [];
+  return filesWhere("name = " + qstr(n) + notFolder + " and (" + dirs.map(d => qstr(d.id) + " in parents").join(" or ") + ")");
+}
+const DRIVE_LETTER = /^[A-Za-z]:$/;
+
 export async function findByPath(tokenPromise, localPath) {
   await tokenPromise;
   const segs = splitPath(localPath);
   const name = segs[segs.length - 1];
   if (!name) return { found: [], name: "" };
-  const byName = async n => (await (await api("https://www.googleapis.com/drive/v3/files?q=" +
-    encodeURIComponent("name = " + qstr(n) + " and trashed = false and mimeType != 'application/vnd.google-apps.folder'") +
-    "&pageSize=50&fields=files(" + FIELDS + ",parents)" + DRIVE_Q)).json()).files || [];
-  let files = await byName(name);
+  const parent = segs.length > 1 ? segs[segs.length - 2] : "";
+  const useParent = parent && !ROOT_NAMES.test(parent) && !DRIVE_LETTER.test(parent);
+  /* 親フォルダの中で探し、無ければ名前だけで探す */
+  const search = async n => {
+    const hit = useParent ? await inParent(parent, n) : [];
+    return hit.length ? hit : filesWhere("name = " + qstr(n) + notFolder);
+  };
+  let files = await search(name);
   /* PC 側だけ「メモ (1).md」のように番号が付いていることがある（Google ドライブのパソコン用アプリが
      同期のときに付ける）。ドライブ側は「メモ.md」なので、見つからなければ番号を外して探し直す */
   const plain = name.replace(/ \(\d+\)(\.[^.]+)$/, "$1");
-  if (!files.length && plain !== name) files = await byName(plain);
-  const list = { files };
+  if (!files.length && plain !== name) files = await search(plain);
   const folders = new Map();
   const folder = async id => {
     if (!folders.has(id)) folders.set(id, api("https://www.googleapis.com/drive/v3/files/" + id +
       "?fields=id,name,parents&supportsAllDrives=true").then(r => r.json()).catch(() => null));
     return folders.get(id);
   };
-  /* 候補ごとに、パスの後ろ（ファイルの親から上）と何段一致するか数える */
+  /* 候補ごとに、パスの後ろ（ファイルの親から上）と何段一致するか数える。
+     選ばせる画面で見分けがつくよう、一致しなくなっても 4 段までは名前を集める */
   const want = segs.slice(0, -1).reverse().map(s => s.toLowerCase());
-  const scored = await Promise.all((list.files || []).map(async f => {
-    let score = 0, id = f.parents && f.parents[0], names = [];
+  const scored = await Promise.all(files.map(async f => {
+    let score = 0, id = f.parents && f.parents[0], names = [], same = true;
     for (let d = 0; id && d < 30; d++) {
+      if (!same && names.length >= 4) break;
       const fo = await folder(id);
-      if (!fo) break;
+      if (!fo) { id = null; break; }
       names.push(fo.name);
       const w = want[d];
-      if (w === undefined) break;
-      const same = fo.name.toLowerCase() === w || (ROOT_NAMES.test(fo.name) && ROOT_NAMES.test(w));
-      if (!same) break;
-      score++;
+      same = same && w !== undefined && (fo.name.toLowerCase() === w || (ROOT_NAMES.test(fo.name) && ROOT_NAMES.test(w)));
+      if (same) score++;
       id = fo.parents && fo.parents[0];
     }
-    return { meta: { id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime }, score, where: names.reverse().join(" / ") };
+    const where = (id ? "… / " : "") + names.reverse().join(" / ");
+    return { meta: { id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime }, score, where };
   }));
   scored.sort((a, b) => b.score - a.score);
   const best = scored.length ? scored[0].score : 0;
