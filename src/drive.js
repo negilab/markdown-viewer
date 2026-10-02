@@ -204,9 +204,15 @@ export async function findByPath(tokenPromise, localPath) {
   const segs = splitPath(localPath);
   const name = segs[segs.length - 1];
   if (!name) return { found: [], name: "" };
-  const q = encodeURIComponent("name = " + qstr(name) + " and trashed = false and mimeType != 'application/vnd.google-apps.folder'");
-  const list = await (await api("https://www.googleapis.com/drive/v3/files?q=" + q +
-    "&pageSize=50&fields=files(" + FIELDS + ",parents)" + DRIVE_Q)).json();
+  const byName = async n => (await (await api("https://www.googleapis.com/drive/v3/files?q=" +
+    encodeURIComponent("name = " + qstr(n) + " and trashed = false and mimeType != 'application/vnd.google-apps.folder'") +
+    "&pageSize=50&fields=files(" + FIELDS + ",parents)" + DRIVE_Q)).json()).files || [];
+  let files = await byName(name);
+  /* PC 側だけ「メモ (1).md」のように番号が付いていることがある（Google ドライブのパソコン用アプリが
+     同期のときに付ける）。ドライブ側は「メモ.md」なので、見つからなければ番号を外して探し直す */
+  const plain = name.replace(/ \(\d+\)(\.[^.]+)$/, "$1");
+  if (!files.length && plain !== name) files = await byName(plain);
+  const list = { files };
   const folders = new Map();
   const folder = async id => {
     if (!folders.has(id)) folders.set(id, api("https://www.googleapis.com/drive/v3/files/" + id +
